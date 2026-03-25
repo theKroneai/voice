@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/* ═══ Tema: dark por defecto ═══ */
+:root,
+[data-theme="dark"] {
+  --theme-bg-page: #0b0b0b;
+  --theme-bg-base: #0f0f0f;
+  --theme-bg-card: #1a1a1a;
+  --theme-bg-elevated: #111111;
+  --theme-bg-input: #0b0b0b;
+  --theme-bg-hover: rgba(255, 255, 255, 0.05);
+  --theme-text-primary: #ffffff;
+  --theme-text-secondary: #e4e4e7;
+  --theme-text-muted: #a1a1aa;
+  --theme-text-dim: #71717a;
+  --theme-border: rgba(39, 39, 42, 0.8);
+  --theme-border-strong: #3f3f46;
+  --theme-accent: #22c55e;
+  --theme-accent-hover: #1fb455;
+  --theme-accent-contrast: #0b0b0b;
+  --theme-ring: #22c55e;
+  --theme-navbar-bg: rgba(11, 11, 11, 0.9);
+  --theme-card-border: rgba(39, 39, 42, 0.8);
+  --theme-input-ring: #3f3f46;
+  --theme-red-bg: rgba(239, 68, 68, 0.1);
+  --theme-red-text: #fecaca;
+  --theme-amber-bg: rgba(245, 158, 11, 0.1);
+  --theme-amber-text: #fde68a;
+}
+
+[data-theme="light"] {
+  --theme-bg-page: #f4f4f5;
+  --theme-bg-base: #ffffff;
+  --theme-bg-card: #ffffff;
+  --theme-bg-elevated: #f4f4f5;
+  --theme-bg-input: #ffffff;
+  --theme-bg-hover: rgba(0, 0, 0, 0.05);
+  --theme-text-primary: #18181b;
+  --theme-text-secondary: #3f3f46;
+  --theme-text-muted: #71717a;
+  --theme-text-dim: #a1a1aa;
+  --theme-border: #e4e4e7;
+  --theme-border-strong: #d4d4d8;
+  --theme-accent: #16a34a;
+  --theme-accent-hover: #15803d;
+  --theme-accent-contrast: #ffffff;
+  --theme-ring: #16a34a;
+  --theme-navbar-bg: rgba(255, 255, 255, 0.95);
+  --theme-card-border: #e4e4e7;
+  --theme-input-ring: #d4d4d8;
+  --theme-red-bg: rgba(239, 68, 68, 0.1);
+  --theme-red-text: #b91c1c;
+  --theme-amber-bg: rgba(245, 158, 11, 0.15);
+  --theme-amber-text: #b45309;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: var(--theme-bg-page);
+  color: var(--theme-text-secondary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Clases de utilidad para tema */
+.theme-bg-page { background-color: var(--theme-bg-page); }
+.theme-bg-base { background-color: var(--theme-bg-base); }
+.theme-bg-card { background-color: var(--theme-bg-card); }
+.theme-bg-elevated { background-color: var(--theme-bg-elevated); }
+.theme-bg-input { background-color: var(--theme-bg-input); }
+.theme-text-primary { color: var(--theme-text-primary); }
+.theme-text-secondary { color: var(--theme-text-secondary); }
+.theme-text-muted { color: var(--theme-text-muted); }
+.theme-text-dim { color: var(--theme-text-dim); }
+.theme-border { border-color: var(--theme-border); }
+.theme-border-strong { border-color: var(--theme-border-strong); }
+.theme-accent { background-color: var(--theme-accent); color: var(--theme-accent-contrast); }
+.theme-accent-text { color: var(--theme-accent); }
+.theme-accent-contrast { color: var(--theme-accent-contrast); }
+.theme-ring { --tw-ring-color: var(--theme-ring); }
+.theme-navbar-bg { background-color: var(--theme-navbar-bg); }
+.theme-card-border { border-color: var(--theme-card-border); }
+.theme-bg-hover { background-color: var(--theme-bg-hover); }
+.hover\:theme-bg-hover:hover { background-color: var(--theme-bg-hover); }
+.hover\:theme-text-primary:hover { color: var(--theme-text-primary); }
+.hover\:opacity-90:hover { opacity: 0.9; }
