@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { BadgeCheck, Loader2, MessageSquare, Phone } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { getPublicWebhookBaseUrl } from '../lib/getPublicWebhookBaseUrl'
 
 type Plan = 'BASICO' | 'PRO' | 'PREMIUM'
 
-const N8N_URL = (import.meta.env.VITE_N8N_URL as string) || ''
+const WEBHOOK_BASE_URL = getPublicWebhookBaseUrl()
 
 const MONTOS_POR_PLAN: Record<string, number[]> = {
   prospectador: [20, 50, 100, 200],
@@ -289,13 +290,13 @@ export default function Credits() {
       data: { session },
     } = await supabase.auth.getSession()
     const userId = session?.user?.id
-    if (!userId || !N8N_URL) {
+    if (!userId || !WEBHOOK_BASE_URL) {
       setCheckoutLoading(null)
       return
     }
     setCheckoutLoading(amountUsd)
     try {
-      const res = await fetch(`${N8N_URL}/webhook/create-checkout`, {
+      const res = await fetch(`${WEBHOOK_BASE_URL}/webhook/create-checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -644,7 +645,7 @@ export default function Credits() {
               <button
                 key={amount}
                 type="button"
-                disabled={!!checkoutLoading || !N8N_URL}
+                disabled={!!checkoutLoading || !WEBHOOK_BASE_URL}
                 onClick={() => startCheckout(amount)}
                 className="relative flex flex-col items-center justify-center rounded-xl border theme-border bg-[#0b0b0b]/80 px-4 py-5 text-center hover:border-[#22c55e]/50 hover:bg-[#22c55e]/10 transition disabled:opacity-60 disabled:cursor-not-allowed min-h-[120px]"
               >
@@ -689,7 +690,7 @@ export default function Credits() {
             />
             <button
               type="button"
-              disabled={!!checkoutLoading || !N8N_URL || !customAmount}
+              disabled={!!checkoutLoading || !WEBHOOK_BASE_URL || !customAmount}
               onClick={() => {
                 const n = Number(customAmount)
                 setRecargaError(null)
@@ -723,9 +724,9 @@ export default function Credits() {
           </div>
         )}
 
-        {!N8N_URL && (
+        {!WEBHOOK_BASE_URL && (
           <p className="text-xs text-amber-200">
-            Configura VITE_N8N_URL en el entorno para habilitar recargas con Stripe.
+            Configura `VITE_WEBHOOK_BASE_URL` o usa el subdominio del frontend para habilitar recargas con Stripe.
           </p>
         )}
       </div>

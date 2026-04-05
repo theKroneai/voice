@@ -4,6 +4,7 @@ import { Menu, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { ThemeToggle } from '../components/ThemeToggle'
 import { KRONE_BRAND_ICON } from '../utils/logos'
+import { getPublicWebhookBaseUrl } from '../lib/getPublicWebhookBaseUrl'
 
 type PlanConfigLanding = {
   plan_id: string
@@ -294,8 +295,8 @@ Genera un texto corto (2-5 frases, máx 200 caracteres) que sea el "mensaje a tr
         ...(call_script && { call_script }),
         demo: true,
       }
-      const n8nUrl = (import.meta.env.VITE_N8N_URL as string | undefined)?.replace(/\/$/, '')
-      if (!n8nUrl) throw new Error('Falta VITE_N8N_URL')
+      const n8nUrl = getPublicWebhookBaseUrl()
+      if (!n8nUrl) throw new Error('Falta configurar VITE_WEBHOOK_BASE_URL o el frontend debe correr en tu subdominio.')
       const res = await fetch(
         `${n8nUrl}/webhook/demo-call`,
         {
@@ -514,127 +515,7 @@ Genera un texto corto (2-5 frases, máx 200 caracteres) que sea el "mensaje a tr
         </section>
 
         {/* ═══════════════════════════════════════════ */}
-        {/* 3. LOGOS CLIENTES */}
-        {/* ═══════════════════════════════════════════ */}
-        <section className="border-y theme-border/50 bg-[#111111] py-10">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <p className="text-center text-sm theme-text-dim">Negocios que ya automatizan sus ventas</p>
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-semibold theme-text-dim">
-              {LOGOS.map((name, i) => (
-                <span key={name} className="flex items-center gap-4">
-                  {name}
-                  {i < LOGOS.length - 1 ? <span className="text-zinc-600">·</span> : null}
-                </span>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════ */}
-        {/* 4. SOLUCIONES */}
-        {/* ═══════════════════════════════════════════ */}
-        <section id="soluciones" className="px-4 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
-              Una solución para cada momento del ciclo de ventas
-            </h2>
-            <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2">
-              {SOLUCIONES.map((s) => (
-                <div
-                  key={s.title}
-                  className={`rounded-2xl border theme-border/80 theme-bg-card p-6 ${s.bgClass}`}
-                >
-                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${s.badgeClass}`}>
-                    {s.badge}
-                  </span>
-                  <div className="mt-4 text-4xl">{s.icon}</div>
-                  <h3 className="mt-3 text-xl font-bold theme-text-primary">{s.title}</h3>
-                  <p className="mt-2 text-sm theme-text-muted">{s.description}</p>
-                  <ul className="mt-4 space-y-1 text-xs theme-text-dim">
-                    {s.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2">
-                        <span className="text-[#22c55e]">✓</span> {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Link
-                    to={s.href}
-                    className="mt-4 inline-block text-sm font-medium text-[#22c55e] hover:underline"
-                  >
-                    {s.cta}
-                  </Link>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════ */}
-        {/* 5. CASOS DE USO */}
-        {/* ═══════════════════════════════════════════ */}
-        <section id="casos" className="border-t theme-border/50 bg-[#111111] px-4 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
-              Para cualquier negocio que vende en USA
-            </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-center theme-text-muted">
-              +25 nichos preconfigurados. Listo para usar en minutos.
-            </p>
-            <div className="mt-12 grid grid-cols-2 gap-4 md:grid-cols-3">
-              {CASOS_USO.map((c) => (
-                <div
-                  key={c.name}
-                  className="rounded-xl border theme-border/80 theme-bg-card p-4 transition hover:border-zinc-600 hover:theme-bg-elevated/50"
-                >
-                  <div className="text-3xl">{c.emoji}</div>
-                  <div className="mt-2 text-sm font-semibold theme-text-primary">{c.name}</div>
-                  <div className="mt-1 text-xs theme-text-dim">{c.desc}</div>
-                </div>
-              ))}
-            </div>
-            <p className="mt-8 text-center text-sm theme-text-dim">
-              ¿Tu nicho no está aquí?{' '}
-              <Link to="/login" className="font-medium text-[#22c55e] hover:underline">
-                Configura uno personalizado en minutos →
-              </Link>
-            </p>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════ */}
-        {/* 6. CÓMO FUNCIONA */}
-        {/* ═══════════════════════════════════════════ */}
-        <section id="como-funciona" className="px-4 py-20 sm:px-6 lg:px-8">
-          <div className="mx-auto max-w-7xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
-              De cero a llamadas en 15 minutos
-            </h2>
-            <div className="mt-14 flex flex-col gap-8 lg:flex-row lg:items-stretch lg:gap-4">
-              {PASOS.map((p, i) => (
-                <div key={p.title} className="relative flex flex-1 flex-col">
-                  <div className="flex flex-col items-center rounded-2xl border theme-border/80 theme-bg-card p-6 text-center">
-                    <div className="text-2xl font-black text-[#22c55e]">{p.num}</div>
-                    <div className="mt-2 text-sm font-bold theme-text-primary">{p.title}</div>
-                    <p className="mt-2 text-xs theme-text-dim">{p.desc}</p>
-                  </div>
-                  {i < PASOS.length - 1 && (
-                    <div className="hidden flex-1 items-center lg:flex">
-                      <div className="h-0.5 w-full bg-gradient-to-r from-[#22c55e]/60 to-transparent" />
-                    </div>
-                  )}
-                  {i < PASOS.length - 1 && (
-                    <div className="flex justify-center py-2 lg:hidden">
-                      <div className="h-4 w-0.5 bg-[#22c55e]/50" />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ═══════════════════════════════════════════ */}
-        {/* 7. DEMO EN VIVO */}
+        {/* 3. DEMO EN VIVO */}
         {/* ═══════════════════════════════════════════ */}
         <section
           id="demo"
@@ -903,6 +784,128 @@ Genera un texto corto (2-5 frases, máx 200 caracteres) que sea el "mensaje a tr
                   </p>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+
+
+        {/* ═══════════════════════════════════════════ */}
+        {/* 4. LOGOS CLIENTES */}
+        {/* ═══════════════════════════════════════════ */}
+        <section className="border-y theme-border/50 bg-[#111111] py-10">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <p className="text-center text-sm theme-text-dim">Negocios que ya automatizan sus ventas</p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-semibold theme-text-dim">
+              {LOGOS.map((name, i) => (
+                <span key={name} className="flex items-center gap-4">
+                  {name}
+                  {i < LOGOS.length - 1 ? <span className="text-zinc-600">·</span> : null}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════ */}
+        {/* 5. SOLUCIONES */}
+        {/* ═══════════════════════════════════════════ */}
+        <section id="soluciones" className="px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
+              Una solución para cada momento del ciclo de ventas
+            </h2>
+            <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2">
+              {SOLUCIONES.map((s) => (
+                <div
+                  key={s.title}
+                  className={`rounded-2xl border theme-border/80 theme-bg-card p-6 ${s.bgClass}`}
+                >
+                  <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${s.badgeClass}`}>
+                    {s.badge}
+                  </span>
+                  <div className="mt-4 text-4xl">{s.icon}</div>
+                  <h3 className="mt-3 text-xl font-bold theme-text-primary">{s.title}</h3>
+                  <p className="mt-2 text-sm theme-text-muted">{s.description}</p>
+                  <ul className="mt-4 space-y-1 text-xs theme-text-dim">
+                    {s.features.map((f) => (
+                      <li key={f} className="flex items-center gap-2">
+                        <span className="text-[#22c55e]">✓</span> {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    to={s.href}
+                    className="mt-4 inline-block text-sm font-medium text-[#22c55e] hover:underline"
+                  >
+                    {s.cta}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════ */}
+        {/* 6. CASOS DE USO */}
+        {/* ═══════════════════════════════════════════ */}
+        <section id="casos" className="border-t theme-border/50 bg-[#111111] px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
+              Para cualquier negocio que vende en USA
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-center theme-text-muted">
+              +25 nichos preconfigurados. Listo para usar en minutos.
+            </p>
+            <div className="mt-12 grid grid-cols-2 gap-4 md:grid-cols-3">
+              {CASOS_USO.map((c) => (
+                <div
+                  key={c.name}
+                  className="rounded-xl border theme-border/80 theme-bg-card p-4 transition hover:border-zinc-600 hover:theme-bg-elevated/50"
+                >
+                  <div className="text-3xl">{c.emoji}</div>
+                  <div className="mt-2 text-sm font-semibold theme-text-primary">{c.name}</div>
+                  <div className="mt-1 text-xs theme-text-dim">{c.desc}</div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-8 text-center text-sm theme-text-dim">
+              ¿Tu nicho no está aquí?{' '}
+              <Link to="/login" className="font-medium text-[#22c55e] hover:underline">
+                Configura uno personalizado en minutos →
+              </Link>
+            </p>
+          </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════ */}
+        {/* 7. CÓMO FUNCIONA */}
+        {/* ═══════════════════════════════════════════ */}
+        <section id="como-funciona" className="px-4 py-20 sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
+              De cero a llamadas en 15 minutos
+            </h2>
+            <div className="mt-14 flex flex-col gap-8 lg:flex-row lg:items-stretch lg:gap-4">
+              {PASOS.map((p, i) => (
+                <div key={p.title} className="relative flex flex-1 flex-col">
+                  <div className="flex flex-col items-center rounded-2xl border theme-border/80 theme-bg-card p-6 text-center">
+                    <div className="text-2xl font-black text-[#22c55e]">{p.num}</div>
+                    <div className="mt-2 text-sm font-bold theme-text-primary">{p.title}</div>
+                    <p className="mt-2 text-xs theme-text-dim">{p.desc}</p>
+                  </div>
+                  {i < PASOS.length - 1 && (
+                    <div className="hidden flex-1 items-center lg:flex">
+                      <div className="h-0.5 w-full bg-gradient-to-r from-[#22c55e]/60 to-transparent" />
+                    </div>
+                  )}
+                  {i < PASOS.length - 1 && (
+                    <div className="flex justify-center py-2 lg:hidden">
+                      <div className="h-4 w-0.5 bg-[#22c55e]/50" />
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
         </section>

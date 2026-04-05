@@ -1,3 +1,9 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    {
+      "source": "/webhook/:path*",
+      "destination": "https://n8n.srv1169487.hstgr.cloud/webhook/:path*"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

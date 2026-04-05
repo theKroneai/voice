@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { getPublicWebhookBaseUrl } from '../lib/getPublicWebhookBaseUrl'
 
 type CrmType =
   | 'bitrix24'
@@ -190,12 +191,11 @@ export default function Integrations() {
     void load()
   }, [])
 
-  const n8nBaseUrl =
-    (import.meta.env.VITE_N8N_URL as string | undefined)?.replace(/\/$/, '') ?? ''
+  const webhookBaseUrl = getPublicWebhookBaseUrl()
   const incomingWebhookUrl = useMemo(() => {
     if (!userId) return ''
-    return `${n8nBaseUrl}/webhook/crm-incoming/${userId}`
-  }, [userId, n8nBaseUrl])
+    return `${webhookBaseUrl}/webhook/crm-incoming/${userId}`
+  }, [userId, webhookBaseUrl])
 
   function openModal(crm: CrmType) {
     setModal({ open: true, crm })
