@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -125,9 +125,15 @@ export default function Landing() {
   const [pricingTab, setPricingTab] = useState<'voz' | 'sms'>('voz')
   const [planesPrecios, setPlanesPrecios] = useState<PlanConfigLanding[]>(FALLBACK_PLANES_LANDING)
   const [planSms, setPlanSms] = useState<PlanConfigLanding>(FALLBACK_SMS_PLAN)
-  const [aiHelpPrompt, setAiHelpPrompt] = useState('')
-  const [aiHelpLoading, setAiHelpLoading] = useState(false)
-  const [aiHelpResult, setAiHelpResult] = useState<string | null>(null)
+  const [demoGenerateLoading, setDemoGenerateLoading] = useState(false)
+  /** True después de pulsar "Generar con IA" (mensaje en textarea sustituido por la IA). */
+  const [demoAiGenerated, setDemoAiGenerated] = useState(false)
+  /** Texto del contexto antes de generar; se usa en "Regenerar". */
+  const [demoContextSnapshot, setDemoContextSnapshot] = useState('')
+  /** Ejemplo real seleccionado (cards superiores). */
+  const [demoFromExample, setDemoFromExample] = useState(false)
+  const [demoSelectedExampleId, setDemoSelectedExampleId] = useState<string | null>(null)
+  const demoFormRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20)
@@ -216,83 +222,127 @@ Reglas:
     }
   }
 
-  const DEMO_MESSAGE_EXAMPLES = [
+  type RealCallExample = {
+    id: string
+    emoji: string
+    title: string
+    badge: string
+    badgeClass: string
+    tipo: string
+    nicho: string
+    preview: string
+    preGeneratedMessage: string
+  }
+
+  const REAL_CALL_EXAMPLES: RealCallExample[] = [
     {
-      label: 'Felicitación de cumpleaños',
-      text: 'Quiero que llames a un cliente y le digas que la Empresa X le desea un feliz cumpleaños, que esperamos que la pase muy feliz y que Dios lo llene de bendiciones hoy y el resto del año.',
+      id: 'cold-water',
+      emoji: '💧',
+      title: 'Llamada en frío Agua',
+      badge: 'Más popular',
+      badgeClass: 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30',
+      tipo: 'Llamada en frío',
+      nicho: 'Purificación de agua',
+      preview: 'Detectamos niveles elevados en su área y queremos...',
+      preGeneratedMessage:
+        'Hola, le llamo de parte de Water Systems. Detectamos niveles elevados de contaminantes en su área y queremos ofrecerle un análisis de agua completamente gratuito en su hogar. ¿Tendría unos minutos para coordinar una visita sin ningún compromiso?',
     },
     {
-      label: 'Recordatorio de cita',
-      text: 'Llama al paciente y recuérdale que la Clínica [Nombre] tiene agendada su cita para mañana a las 10am. Que puede confirmar o reprogramar llamando al número que les enviamos.',
+      id: 'followup-cita',
+      emoji: '📅',
+      title: 'Seguimiento cita no confirmada',
+      badge: 'Muy efectivo',
+      badgeClass: 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/30',
+      tipo: 'Seguimiento',
+      nicho: 'General',
+      preview: 'Confirmar su cita del jueves a las 3pm...',
+      preGeneratedMessage:
+        'Hola, le llamo de Krone Services para confirmar su cita del jueves a las 3 de la tarde. ¿Sigue en pie o necesita reagendar? Solo toma un momento confirmarlo.',
+    },
+    {
+      id: 'reactivate',
+      emoji: '🔄',
+      title: 'Reactivación cliente inactivo',
+      badge: 'Alto ROI',
+      badgeClass: 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/35',
+      tipo: 'Reactivación',
+      nicho: 'General',
+      preview: 'Descuento especial del 15% por ser cliente...',
+      preGeneratedMessage:
+        'Hola, le llamo de Mi Negocio Latino. Ha pasado un tiempo desde su última visita y queremos ofrecerle un descuento especial del 15% en su próxima compra como agradecimiento por ser nuestro cliente. ¿Le interesa?',
     },
   ]
 
-  /** Genera con IA un mensaje sugerido a partir de una idea corta (ej: "felicitación cumpleaños de mi empresa") */
-  async function generateMessageWithAI(idea: string): Promise<string | null> {
-    const key = import.meta.env.VITE_OPENROUTER_API_KEY
-    if (!key?.trim() || !idea?.trim()) return null
-    try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${key}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'Krone Demo',
-        },
-        body: JSON.stringify({
-          model: 'anthropic/claude-3.5-haiku',
-          max_tokens: 250,
-          messages: [
-            {
-              role: 'user',
-              content: `El usuario va a recibir una llamada de un agente de voz IA. Necesita que le redactes el MENSAJE que debe transmitir la llamada, tal como él lo describiría en sus palabras (para que luego la IA lo mejore al hablar).
+  function scrollToDemoForm() {
+    demoFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
-Descripción del usuario: "${idea.trim()}"
+  function applyRealCallExample(ex: RealCallExample) {
+    setBusinessDesc(ex.preGeneratedMessage.slice(0, 300))
+    setDemoSelectedExampleId(ex.id)
+    setDemoFromExample(true)
+    setDemoAiGenerated(false)
+    setDemoContextSnapshot('')
+    scrollToDemoForm()
+  }
 
-Genera un texto corto (2-5 frases, máx 200 caracteres) que sea el "mensaje a transmitir": qué debe decir la llamada, con el tono adecuado (cercano, profesional). Responde ÚNICAMENTE con ese texto, sin comillas ni "Mensaje:" ni explicaciones. En español.`,
-            },
-          ],
-        }),
-      })
-      if (!res.ok) return null
-      const data = await res.json()
-      const text = data.choices?.[0]?.message?.content?.trim?.()
-      return text && text.length > 0 ? text.slice(0, 200) : null
-    } catch {
-      return null
+  function handleBusinessDescChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const next = e.target.value
+    setBusinessDesc(next)
+    if (demoFromExample && demoSelectedExampleId) {
+      const ex = REAL_CALL_EXAMPLES.find((x) => x.id === demoSelectedExampleId)
+      if (ex && next !== ex.preGeneratedMessage.slice(0, 300)) {
+        setDemoFromExample(false)
+        setDemoSelectedExampleId(null)
+      }
     }
   }
 
-  async function handleAskAIHelp() {
-    if (!aiHelpPrompt.trim() || aiHelpLoading) return
-    setAiHelpLoading(true)
-    setAiHelpResult(null)
+  async function handleGenerateDemoWithAI() {
+    if (!businessDesc.trim() || demoGenerateLoading) return
+    setDemoGenerateLoading(true)
     try {
-      const suggestion = await generateMessageWithAI(aiHelpPrompt)
-      if (suggestion) setAiHelpResult(suggestion)
+      const snapshot = businessDesc.trim()
+      const script = await generateCallScript(snapshot)
+      if (script) {
+        setDemoContextSnapshot(snapshot)
+        setBusinessDesc(script.slice(0, 300))
+        setDemoAiGenerated(true)
+        setDemoFromExample(false)
+        setDemoSelectedExampleId(null)
+      }
     } finally {
-      setAiHelpLoading(false)
+      setDemoGenerateLoading(false)
+    }
+  }
+
+  async function handleRegenerateDemoMessage() {
+    if (!demoContextSnapshot.trim() || demoGenerateLoading) return
+    setDemoGenerateLoading(true)
+    try {
+      const script = await generateCallScript(demoContextSnapshot)
+      if (script) {
+        setBusinessDesc(script.slice(0, 300))
+        setDemoAiGenerated(true)
+      }
+    } finally {
+      setDemoGenerateLoading(false)
     }
   }
 
   async function handleDemoSubmit() {
-    if (!phoneIsValid || demoLoading) return
+    if (!phoneIsValid || demoLoading || !businessDesc.trim()) return
     setDemoLoading(true)
     setDemoSuccess(false)
     setDemoError(false)
     try {
-      let call_script: string | null = null
-      if (businessDesc.trim()) {
-        call_script = await generateCallScript(businessDesc)
-      }
-
+      const trimmed = businessDesc.trim()
       const body = {
         phone: `+1${phoneRaw}`,
         agent_name: agentName,
         agent_gender: agentGender,
-        business_description: businessDesc,
-        ...(call_script && { call_script }),
+        business_description: trimmed,
+        call_script: trimmed,
         demo: true,
       }
       const n8nUrl = getPublicWebhookBaseUrl()
@@ -522,6 +572,58 @@ Genera un texto corto (2-5 frases, máx 200 caracteres) que sea el "mensaje a tr
           className="border-y theme-border/50 bg-[#111111] px-4 py-20 sm:px-6 lg:px-8"
         >
           <div className="mx-auto max-w-7xl">
+            {/* Ejemplos de llamadas reales — encima del bloque demo */}
+            <div className="mb-12">
+              <h3 className="text-center text-2xl font-black tracking-tight text-zinc-100 md:text-3xl">
+                Prueba con un ejemplo real
+              </h3>
+              <p className="mx-auto mt-2 max-w-2xl text-center text-sm text-zinc-400 md:text-base">
+                Haz click en cualquier ejemplo y llámalo en segundos
+              </p>
+              <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
+                {REAL_CALL_EXAMPLES.map((ex) => {
+                  const selected = demoSelectedExampleId === ex.id
+                  return (
+                    <button
+                      key={ex.id}
+                      type="button"
+                      onClick={() => applyRealCallExample(ex)}
+                      className={
+                        'group flex w-full flex-col rounded-2xl border bg-[#0b0b0b] p-4 text-left transition ' +
+                        (selected
+                          ? 'border-[#22c55e] ring-2 ring-[#22c55e]/50'
+                          : 'border-zinc-800 hover:border-[#22c55e]/70')
+                      }
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="text-sm font-semibold text-zinc-100">
+                          {ex.emoji} {ex.title}
+                        </span>
+                        <span
+                          className={
+                            'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ' + ex.badgeClass
+                          }
+                        >
+                          {ex.badge}
+                        </span>
+                      </div>
+                      <div className="my-3 h-px bg-zinc-800" />
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                        {ex.tipo}
+                      </p>
+                      <p className="mt-0.5 text-sm text-zinc-300">{ex.nicho}</p>
+                      <p className="mt-3 flex-1 text-[13px] leading-snug text-zinc-500">
+                        &quot;{ex.preview}&quot;
+                      </p>
+                      <span className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-[#22c55e]/15 py-2.5 text-xs font-semibold text-[#22c55e] ring-1 ring-[#22c55e]/30 group-hover:bg-[#22c55e]/25">
+                        ⚡ Usar este ejemplo
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-start">
               {/* Columna izquierda: texto */}
               <div>
@@ -557,7 +659,11 @@ Genera un texto corto (2-5 frases, máx 200 caracteres) que sea el "mensaje a tr
               </div>
 
               {/* Columna derecha: formulario */}
-              <div className="rounded-2xl border theme-border theme-bg-card p-6">
+              <div
+                id="demo-form"
+                ref={demoFormRef}
+                className="rounded-2xl border theme-border theme-bg-card p-6"
+              >
                 <h3 className="text-lg font-semibold theme-text-primary">
                   Recibir llamada de demo
                 </h3>
@@ -578,76 +684,51 @@ Genera un texto corto (2-5 frases, máx 200 caracteres) que sea el "mensaje a tr
                       Escribe en tus palabras el mensaje que quieres que el agente transmita. La IA lo mejorará para que suene natural al hablar.
                     </p>
                     <textarea
-                      rows={3}
-                      maxLength={200}
+                      rows={4}
+                      maxLength={300}
                       value={businessDesc}
-                      onChange={(e) => setBusinessDesc(e.target.value)}
+                      onChange={handleBusinessDescChange}
                       placeholder="Ej: Que la Empresa X le desea un feliz cumpleaños y que Dios lo llene de bendiciones..."
                       className="mt-2 w-full rounded-lg theme-bg-base px-3 py-2 text-sm text-zinc-100 ring-1 theme-border/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e] resize-none"
                     />
-                    <div className="mt-1 flex items-center justify-between gap-2">
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[11px] theme-text-dim">
-                        {businessDesc.length} / 200
+                        {businessDesc.length} / 300
                       </span>
+                      <button
+                        type="button"
+                        onClick={handleGenerateDemoWithAI}
+                        disabled={demoGenerateLoading || !businessDesc.trim() || demoFromExample}
+                        title={
+                          demoFromExample
+                            ? 'Edita el mensaje para salir del ejemplo y poder usar la IA'
+                            : undefined
+                        }
+                        className="rounded-lg bg-[#22c55e]/20 px-3 py-1.5 text-xs font-semibold text-[#22c55e] hover:bg-[#22c55e]/30 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {demoGenerateLoading ? 'Generando...' : 'Generar con IA'}
+                      </button>
                     </div>
-
-                    {/* Ejemplos (clic para usar) */}
-                    <p className="mt-3 text-[11px] font-medium theme-text-dim">
-                      Ejemplos — haz clic para usar uno:
-                    </p>
-                    <div className="mt-1.5 flex flex-wrap gap-2">
-                      {DEMO_MESSAGE_EXAMPLES.map((ex) => (
-                        <button
-                          key={ex.label}
-                          type="button"
-                          onClick={() => setBusinessDesc(ex.text)}
-                          className="rounded-lg border border-zinc-700/80 theme-bg-base px-3 py-2 text-left text-[11px] theme-text-muted hover:border-[#22c55e]/50 hover:bg-[#22c55e]/10 hover:theme-text-secondary transition"
-                        >
-                          <span className="font-medium theme-text-muted">{ex.label}</span>
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Solicitar ayuda de la IA */}
-                    <div className="mt-3 rounded-lg border theme-border/80 theme-bg-base/60 p-3">
-                      <p className="text-[11px] font-medium theme-text-muted">
-                        ¿No sabes cómo redactarlo? Pide ayuda a la IA:
+                    {demoFromExample && (
+                      <p className="mt-2 text-[11px] text-[#86efac]/90">
+                        ✨ Ejemplo real — puedes editarlo
                       </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <input
-                          type="text"
-                          value={aiHelpPrompt}
-                          onChange={(e) => setAiHelpPrompt(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleAskAIHelp()}
-                          placeholder="Ej: felicitación de cumpleaños de mi empresa"
-                          className="flex-1 min-w-[160px] rounded-lg theme-bg-page px-3 py-2 text-xs text-zinc-100 ring-1 theme-border-strong/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
-                        />
+                    )}
+                    {demoAiGenerated && (
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[11px] text-[#86efac]/90">
+                          ✨ Mensaje generado por IA — puedes editarlo
+                        </p>
                         <button
                           type="button"
-                          onClick={handleAskAIHelp}
-                          disabled={aiHelpLoading || !aiHelpPrompt.trim()}
-                          className="rounded-lg bg-[#22c55e]/20 px-3 py-2 text-xs font-semibold text-[#22c55e] hover:bg-[#22c55e]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={handleRegenerateDemoMessage}
+                          disabled={demoGenerateLoading || !demoContextSnapshot.trim()}
+                          className="rounded-lg border border-zinc-600/80 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 hover:bg-zinc-700/80 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          {aiHelpLoading ? 'Generando...' : 'Generar con IA'}
+                          🔄 Regenerar
                         </button>
                       </div>
-                      {aiHelpResult && (
-                        <div className="mt-2 rounded-lg border border-[#22c55e]/30 bg-[#22c55e]/5 p-2">
-                          <p className="text-xs theme-text-muted">{aiHelpResult}</p>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setBusinessDesc(aiHelpResult!)
-                              setAiHelpResult(null)
-                              setAiHelpPrompt('')
-                            }}
-                            className="mt-2 text-[11px] font-semibold text-[#22c55e] hover:underline"
-                          >
-                            Usar este texto →
-                          </button>
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
 
                   {/* Campo 2: teléfono */}
@@ -748,12 +829,14 @@ Genera un texto corto (2-5 frases, máx 200 caracteres) que sea el "mensaje a tr
                     <button
                       type="button"
                       onClick={handleDemoSubmit}
-                      disabled={!phoneIsValid || demoLoading}
+                      disabled={!phoneIsValid || demoLoading || !businessDesc.trim()}
                       className={
                         'inline-flex w-full items-center justify-center rounded-xl px-4 py-3 text-sm font-semibold transition ' +
-                        (demoLoading || !phoneIsValid
+                        (demoLoading || !phoneIsValid || !businessDesc.trim()
                           ? 'bg-[#22c55e] text-[#0b0b0b] opacity-60'
-                          : 'bg-[#22c55e] text-[#0b0b0b] hover:bg-[#1fb455]')
+                          : (demoAiGenerated || demoFromExample) && phoneIsValid
+                            ? 'bg-[#22c55e] text-[#0b0b0b] shadow-lg shadow-[#22c55e]/40 ring-2 ring-[#86efac] hover:bg-[#4ade80]'
+                            : 'bg-[#22c55e] text-[#0b0b0b] hover:bg-[#1fb455]')
                       }
                     >
                       {demoLoading ? (

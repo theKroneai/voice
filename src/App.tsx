@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, lazy, Suspense } from 'react'
 import {
   BrowserRouter,
   Navigate,
@@ -11,22 +11,23 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { parseEsAdmin } from './lib/esAdmin'
 import { Layout } from './components/Layout'
-import Landing from './pages/Landing'
-import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
-import Campaigns from './pages/Campaigns'
-import InboundAgents from './pages/InboundAgents'
-import Contacts from './pages/Contacts'
-import Sequences from './pages/Sequences'
-import Calls from './pages/Calls'
-import SMS from './pages/SMS'
-import Credits from './pages/Credits'
-import Referrals from './pages/Referrals'
-import Appointments from './pages/Appointments'
-import Onboarding from './pages/Onboarding'
-import Settings from './pages/Settings'
-import Integrations from './pages/Integrations'
-import Admin from './pages/Admin'
+
+const Landing = lazy(() => import('./pages/Landing'))
+const Login = lazy(() => import('./pages/Login'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Campaigns = lazy(() => import('./pages/Campaigns'))
+const InboundAgents = lazy(() => import('./pages/InboundAgents'))
+const Contacts = lazy(() => import('./pages/Contacts'))
+const Sequences = lazy(() => import('./pages/Sequences'))
+const Calls = lazy(() => import('./pages/Calls'))
+const SMS = lazy(() => import('./pages/SMS'))
+const Credits = lazy(() => import('./pages/Credits'))
+const Referrals = lazy(() => import('./pages/Referrals'))
+const Appointments = lazy(() => import('./pages/Appointments'))
+const Onboarding = lazy(() => import('./pages/Onboarding'))
+const Settings = lazy(() => import('./pages/Settings'))
+const Integrations = lazy(() => import('./pages/Integrations'))
+const Admin = lazy(() => import('./pages/Admin'))
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation()
@@ -119,7 +120,8 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   return (
-    <Routes>
+    <Suspense fallback={<div>Cargando...</div>}>
+      <Routes>
       {/* Rutas públicas: "/" y "/login" como hijos de path="/" para que "/*" no capture la raíz */}
       <Route path="/" element={<Outlet />}>
         <Route index element={<Landing />} />
@@ -160,6 +162,7 @@ function AppRoutes() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </Suspense>
   )
 }
 
