@@ -8,6 +8,7 @@ import {
   Users,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { parseEsAdmin } from '../lib/esAdmin'
 import { KRONE_BRAND_ICON } from '../utils/logos'
 
 const linkBase =
@@ -20,31 +21,50 @@ export function Sidebar() {
 
   useEffect(() => {
     let mounted = true
-    ;(async () => {
+
+    async function loadAdminFlag() {
       try {
         const {
-          data: { session },
-        } = await supabase.auth.getSession()
-        const uid = session?.user?.id
-        if (!uid) {
+          data: { user: authUser },
+          error: authErr,
+        } = await supabase.auth.getUser()
+        const uid = authUser?.id
+        if (authErr || !uid) {
           if (mounted) setIsAdmin(false)
           return
         }
-        const { data: userData } = await supabase
+        const { data, error } = await supabase
           .from('users')
-          .select('es_admin')
+          .select('id, es_admin, onboarding_completado, nombre')
           .eq('id', uid)
-          .single()
-        // Debug en consola
+          .maybeSingle()
         // eslint-disable-next-line no-console
-        console.log('es_admin:', userData?.es_admin)
-        if (mounted) setIsAdmin(userData?.es_admin === true)
-      } catch (e) {
+        console.log('users data:', data)
+        // eslint-disable-next-line no-console
+        console.log('users error:', error)
+        if (!mounted) return
+        if (error) {
+          if (import.meta.env.DEV) {
+            console.warn('[Sidebar] users/es_admin:', error.message)
+          }
+          setIsAdmin(false)
+          return
+        }
+        setIsAdmin(parseEsAdmin(data?.es_admin))
+      } catch {
         if (mounted) setIsAdmin(false)
       }
-    })()
+    }
+
+    void loadAdminFlag()
+
+    const { data: sub } = supabase.auth.onAuthStateChange(() => {
+      void loadAdminFlag()
+    })
+
     return () => {
       mounted = false
+      sub.subscription.unsubscribe()
     }
   }, [])
 
@@ -197,9 +217,12 @@ export function Sidebar() {
 
       {isAdmin && (
         <div className="border-t theme-border mt-auto py-3 px-4">
-          <a href="/admin" className="text-red-500 text-xs font-semibold hover:underline">
+          <NavLink
+            to="/admin"
+            className="text-red-500 text-xs font-semibold hover:underline"
+          >
             ⚙️ Admin Panel
-          </a>
+          </NavLink>
         </div>
       )}
     </aside>

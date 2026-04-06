@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { parseEsAdmin } from '../lib/esAdmin'
 
 type PhoneNumber = {
   id: string
@@ -34,6 +35,48 @@ type AdminUser = {
   plan: string | null
   minutos_disponibles: number | null
   last_sign_in_at: string | null
+}
+
+type CreditsNestedRow = {
+  plan_voz: string | null
+  minutos_voz: number | null
+  sms_disponibles: number | null
+  saldo_referidos_usd: number | null
+}
+
+type UserCreditsAdminRow = {
+  id: string
+  email: string | null
+  nombre: string | null
+  created_at: string
+  credits: CreditsNestedRow | null
+}
+
+const PLAN_VOZ_OPTIONS = ['prospectador', 'vendedor', 'cazador'] as const
+type PlanVozAdmin = (typeof PLAN_VOZ_OPTIONS)[number]
+
+function normalizeCreditsRelation(raw: unknown): CreditsNestedRow | null {
+  if (raw == null) return null
+  if (Array.isArray(raw)) {
+    const first = raw[0] as CreditsNestedRow | undefined
+    return first ?? null
+  }
+  return raw as CreditsNestedRow
+}
+
+function planVozBadgeClass(plan: string | null | undefined): string {
+  const p = (plan ?? '').toLowerCase()
+  if (p === 'cazador') return 'bg-emerald-500/20 text-emerald-300'
+  if (p === 'vendedor') return 'bg-sky-500/20 text-sky-300'
+  return 'bg-zinc-600/40 text-zinc-300'
+}
+
+function planVozLabel(plan: string | null | undefined): string {
+  const p = (plan ?? '').toLowerCase()
+  if (p === 'vendedor') return 'Vendedor'
+  if (p === 'cazador') return 'Cazador'
+  if (p === 'prospectador') return 'Prospectador'
+  return plan?.trim() || '—'
 }
 
 type CallLog = {
@@ -301,16 +344,39 @@ export default function Admin() {
   const [crmCatalogEdit, setCrmCatalogEdit] = useState<CrmCatalogRow | null>(null)
   const [savingCrmCatalog, setSavingCrmCatalog] = useState(false)
 
+  const [usersCreditsList, setUsersCreditsList] = useState<UserCreditsAdminRow[]>([])
+  const [usersCreditsSearch, setUsersCreditsSearch] = useState('')
+  const [creditsModalUser, setCreditsModalUser] = useState<UserCreditsAdminRow | null>(null)
+  const [creditPlan, setCreditPlan] = useState<PlanVozAdmin>('prospectador')
+  const [creditMinutosTotales, setCreditMinutosTotales] = useState(0)
+  const [creditSmsTotales, setCreditSmsTotales] = useState(0)
+  const [creditSaldoReferidos, setCreditSaldoReferidos] = useState(0)
+  const [creditMinutosAgregar, setCreditMinutosAgregar] = useState('')
+  const [creditSmsAgregar, setCreditSmsAgregar] = useState('')
+  const [creditNota, setCreditNota] = useState('')
+  const [creditInitialMinutos, setCreditInitialMinutos] = useState(0)
+  const [creditInitialSms, setCreditInitialSms] = useState(0)
+  const [savingCreditsAdjust, setSavingCreditsAdjust] = useState(false)
+  const [creditsAdjustToast, setCreditsAdjustToast] = useState<string | null>(null)
+
   useEffect(() => {
     let mounted = true
     async function load() {
       try {
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-        if (sessionError || !session?.user?.id) { setError('No autorizado'); return }
-        const { data: me } = await supabase.from('users').select('es_admin').eq('id', session.user.id).maybeSingle()
-        if (!me?.es_admin) { setError('Acceso denegado'); return }
+        const { data: { user }, error: authError } = await supabase.auth.getUser()
+        if (authError || !user?.id) { setError('No autorizado'); return }
+        const { data, error } = await supabase
+          .from('users')
+          .select('id, es_admin, onboarding_completado, nombre')
+          .eq('id', user.id)
+          .maybeSingle()
+        // eslint-disable-next-line no-console
+        console.log('users data:', data)
+        // eslint-disable-next-line no-console
+        console.log('users error:', error)
+        if (!parseEsAdmin(data?.es_admin)) { setError('Acceso denegado'); return }
 
-        const [usersRes, callsRes, callsTodayRes, config, phones, usersData, logs, nichosData, plansData, catalogData] = await Promise.all([
+        const [usersRes, callsRes, callsTodayRes, config, phones, usersData, usersCreditsRes, logs, nichosData, plansData, catalogData] = await Promise.all([
           supabase.from('users').select('*', { count: 'exact', head: true }),
           supabase.from('call_logs').select('*', { count: 'exact', head: true }),
           supabase.from('call_logs').select('duracion').gte('created_at', new Date().toISOString().slice(0, 10)),
@@ -323,6 +389,23 @@ export default function Admin() {
             .maybeSingle(),
           supabase.from('phone_numbers').select('id, numero, descripcion, estado, asignado_a, rotacion').order('numero'),
           supabase.from('users').select('id, email, company_name, nicho').order('email'),
+          supabase
+            .from('users')
+            .select(
+              `
+            id,
+            email,
+            nombre,
+            created_at,
+            credits (
+              plan_voz,
+              minutos_voz,
+              sms_disponibles,
+              saldo_referidos_usd
+            )
+          `,
+            )
+            .order('created_at', { ascending: false }),
           supabase.from('call_logs').select('id, user_id, contacto, duracion, estado, costo, created_at').order('created_at', { ascending: false }).limit(100),
           supabase.from('nicho_templates').select('*').order('nicho'),
           supabase.from('plan_config').select('*').order('precio_por_minuto', { ascending: true }),
@@ -333,6 +416,14 @@ export default function Admin() {
         ])
 
         if (!mounted) return
+        // eslint-disable-next-line no-console
+        console.log('users data:', usersData?.data)
+        // eslint-disable-next-line no-console
+        console.log('users error:', usersData?.error)
+        // eslint-disable-next-line no-console
+        console.log('users data:', { count: usersRes.count })
+        // eslint-disable-next-line no-console
+        console.log('users error:', usersRes.error)
         const totalUsers = usersRes.count ?? 0
         const totalCalls = callsRes.count ?? 0
         const callsToday = callsTodayRes.data ?? []
@@ -370,6 +461,17 @@ export default function Admin() {
         setPhoneNumbers((phones?.data ?? []) as PhoneNumber[])
         setNichos((nichosData?.data ?? []) as NichoTemplate[])
 
+        const creditsRowsRaw = (usersCreditsRes?.data ?? []) as Record<string, unknown>[]
+        setUsersCreditsList(
+          creditsRowsRaw.map((row) => ({
+            id: String(row.id),
+            email: row.email != null ? String(row.email) : null,
+            nombre: row.nombre != null ? String(row.nombre) : null,
+            created_at: String(row.created_at ?? ''),
+            credits: normalizeCreditsRelation(row.credits),
+          })),
+        )
+
         const usersList = (usersData?.data ?? []) as AdminUser[]
         const userIdsForCredits = usersList.map((u) => u.id)
         let creditsMap = new Map<string, { minutos: number; plan: string | null }>()
@@ -383,7 +485,11 @@ export default function Admin() {
         const userIds = [...new Set(logsList.map((l: CallLog) => l.user_id))]
         let emailMap = new Map<string, string | null>()
         if (userIds.length > 0) {
-          const { data: emailsData } = await supabase.from('users').select('id, email').in('id', userIds)
+          const { data: emailsData, error: emailsError } = await supabase.from('users').select('id, email').in('id', userIds)
+          // eslint-disable-next-line no-console
+          console.log('users data:', emailsData)
+          // eslint-disable-next-line no-console
+          console.log('users error:', emailsError)
           emailMap = new Map((emailsData ?? []).map((r: { id: string; email: string | null }) => [r.id, r.email]))
         }
         setCallLogs(logsList.map((l: CallLog) => ({ ...l, user_email: emailMap.get(l.user_id) ?? l.user_id })))
@@ -589,6 +695,112 @@ export default function Admin() {
     } finally { setSavingMinutes(false) }
   }
 
+  function planVozFromDb(p: string | null | undefined): PlanVozAdmin {
+    const x = (p ?? '').toLowerCase()
+    return (PLAN_VOZ_OPTIONS as readonly string[]).includes(x) ? (x as PlanVozAdmin) : 'prospectador'
+  }
+
+  function openCreditsAdjustModal(u: UserCreditsAdminRow) {
+    const c = u.credits
+    const min = Math.max(0, Math.floor(Number(c?.minutos_voz ?? 0)))
+    const sms = Math.max(0, Math.floor(Number(c?.sms_disponibles ?? 0)))
+    const saldo = Number(c?.saldo_referidos_usd ?? 0)
+    setCreditsModalUser(u)
+    setCreditPlan(planVozFromDb(c?.plan_voz))
+    setCreditMinutosTotales(min)
+    setCreditSmsTotales(sms)
+    setCreditSaldoReferidos(saldo)
+    setCreditMinutosAgregar('')
+    setCreditSmsAgregar('')
+    setCreditNota('')
+    setCreditInitialMinutos(min)
+    setCreditInitialSms(sms)
+  }
+
+  function applyCreditMinutosAgregar() {
+    const n = parseInt(creditMinutosAgregar, 10)
+    if (isNaN(n)) return
+    setCreditMinutosTotales((v) => Math.max(0, v + n))
+    setCreditMinutosAgregar('')
+  }
+
+  function applyCreditSmsAgregar() {
+    const n = parseInt(creditSmsAgregar, 10)
+    if (isNaN(n)) return
+    setCreditSmsTotales((v) => Math.max(0, v + n))
+    setCreditSmsAgregar('')
+  }
+
+  async function saveCreditsAdjust() {
+    if (!creditsModalUser) return
+    setSavingCreditsAdjust(true)
+    try {
+      const plan = creditPlan
+      const minutosNuevo = Math.max(0, Math.floor(Number(creditMinutosTotales) || 0))
+      const smsNuevo = Math.max(0, Math.floor(Number(creditSmsTotales) || 0))
+      const saldoReferidos = Number(creditSaldoReferidos) || 0
+      const minutosIniciales = creditInitialMinutos
+      const notaTrim = creditNota.trim()
+
+      const { error } = await supabase.from('credits').upsert(
+        {
+          user_id: creditsModalUser.id,
+          plan_voz: plan,
+          minutos_voz: minutosNuevo,
+          sms_disponibles: smsNuevo,
+          saldo_referidos_usd: saldoReferidos,
+        },
+        { onConflict: 'user_id' },
+      )
+      if (error) throw error
+
+      await supabase.from('credit_transactions').insert({
+        user_id: creditsModalUser.id,
+        tipo: 'ajuste_admin',
+        monto_usd: 0,
+        minutos: minutosNuevo - minutosIniciales,
+        descripcion: `Ajuste manual admin: ${notaTrim || 'sin nota'}`,
+      })
+
+      setCreditsAdjustToast('Créditos actualizados correctamente')
+      setTimeout(() => setCreditsAdjustToast(null), 3500)
+      const uid = creditsModalUser.id
+      setCreditsModalUser(null)
+      setUsersCreditsList((prev) =>
+        prev.map((row) =>
+          row.id === uid
+            ? {
+                ...row,
+                credits: {
+                  plan_voz: plan,
+                  minutos_voz: minutosNuevo,
+                  sms_disponibles: smsNuevo,
+                  saldo_referidos_usd: saldoReferidos,
+                },
+              }
+            : row,
+        ),
+      )
+      setUsers((prev) =>
+        prev.map((row) =>
+          row.id === uid
+            ? {
+                ...row,
+                minutos_disponibles: minutosNuevo,
+                plan,
+              }
+            : row,
+        ),
+      )
+    } catch (e) {
+      console.error(e)
+      setCreditsAdjustToast(e instanceof Error ? e.message : 'Error al guardar créditos')
+      setTimeout(() => setCreditsAdjustToast(null), 4000)
+    } finally {
+      setSavingCreditsAdjust(false)
+    }
+  }
+
   function openNichoModal(nicho?: NichoTemplate) {
     if (nicho) {
       setEditingNicho(nicho)
@@ -663,6 +875,15 @@ export default function Admin() {
 
   if (loading) return <div className="flex items-center justify-center py-12"><span className="text-sm theme-text-muted">Cargando panel admin...</span></div>
   if (error) return <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">{error}. Solo usuarios administradores pueden acceder.</div>
+
+  const creditsSearchQ = usersCreditsSearch.trim().toLowerCase()
+  const usersCreditsFiltered = creditsSearchQ
+    ? usersCreditsList.filter((u) => {
+        const em = (u.email ?? '').toLowerCase()
+        const nom = (u.nombre ?? '').toLowerCase()
+        return em.includes(creditsSearchQ) || nom.includes(creditsSearchQ)
+      })
+    : usersCreditsList
 
   const nichoFields: { key: keyof Omit<NichoTemplate, 'id'>; label: string }[] = [
     { key: 'nicho', label: 'ID del Nicho (ej: agua, dental)' },
@@ -1183,6 +1404,91 @@ export default function Admin() {
         </div>
       </div>
 
+      {/* Créditos — usuarios */}
+      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-base font-semibold theme-text-primary">Usuarios y créditos</h2>
+            <p className="mt-1 text-sm theme-text-muted">
+              Plan, minutos y SMS. Búsqueda por nombre o email.
+            </p>
+          </div>
+          <input
+            type="search"
+            value={usersCreditsSearch}
+            onChange={(e) => setUsersCreditsSearch(e.target.value)}
+            placeholder="Buscar por nombre o email…"
+            className="w-full max-w-sm rounded-lg border border-zinc-800/80 bg-[#0b0b0b] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+          />
+        </div>
+        {creditsAdjustToast && (
+          <div
+            className={`mt-3 rounded-lg px-3 py-2 text-sm font-medium ${
+              creditsAdjustToast === 'Créditos actualizados correctamente'
+                ? 'bg-[#22c55e]/20 text-[#22c55e]'
+                : 'bg-red-500/15 text-red-300'
+            }`}
+          >
+            {creditsAdjustToast}
+          </div>
+        )}
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b theme-border/80 text-xs theme-text-muted">
+              <tr>
+                <th className="px-3 py-2">Nombre</th>
+                <th className="px-3 py-2">Email</th>
+                <th className="px-3 py-2">Plan</th>
+                <th className="px-3 py-2">Minutos</th>
+                <th className="px-3 py-2">SMS</th>
+                <th className="px-3 py-2">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {usersCreditsFiltered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center theme-text-dim">
+                    {usersCreditsList.length === 0 ? 'No hay usuarios.' : 'Ningún resultado para la búsqueda.'}
+                  </td>
+                </tr>
+              ) : (
+                usersCreditsFiltered.map((u) => {
+                  const c = u.credits
+                  const plan = c?.plan_voz ?? null
+                  const mins = Math.floor(Number(c?.minutos_voz ?? 0))
+                  const sms = Math.floor(Number(c?.sms_disponibles ?? 0))
+                  const nombreCol = u.nombre?.trim() || '—'
+                  return (
+                    <tr key={u.id} className="border-b theme-border/80">
+                      <td className="px-3 py-2 font-medium theme-text-primary">{nombreCol}</td>
+                      <td className="px-3 py-2 theme-text-muted">{u.email ?? '—'}</td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold ${planVozBadgeClass(plan)}`}
+                        >
+                          {planVozLabel(plan)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 theme-text-muted">{mins}</td>
+                      <td className="px-3 py-2 theme-text-muted">{sms}</td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => openCreditsAdjustModal(u)}
+                          className="rounded bg-[#22c55e]/20 px-2.5 py-1 text-xs font-semibold text-[#22c55e] hover:bg-[#22c55e]/30"
+                        >
+                          💳 Créditos
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       {/* Usuarios */}
       <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
         <h2 className="text-base font-semibold theme-text-primary">Usuarios</h2>
@@ -1416,6 +1722,141 @@ export default function Admin() {
               <button type="button" onClick={() => setCrmCatalogEdit(null)} className="rounded-lg px-3 py-2 text-sm theme-text-muted ring-1 ring-zinc-700/80">Cancelar</button>
               <button type="button" onClick={saveCrmCatalogEdit} disabled={savingCrmCatalog} className="rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] disabled:opacity-60">
                 {savingCrmCatalog ? 'Guardando...' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal cargar créditos (admin) */}
+      {creditsModalUser && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 px-4 py-8">
+          <div className="w-full max-w-lg rounded-2xl border theme-border/80 bg-[#0b0b0b] p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-3">
+              <h3 className="pr-8 text-lg font-semibold theme-text-primary">
+                Créditos de{' '}
+                {creditsModalUser.nombre?.trim() || creditsModalUser.email || 'usuario'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setCreditsModalUser(null)}
+                className="shrink-0 rounded-lg p-2 theme-text-muted hover:bg-zinc-800/60"
+                aria-label="Cerrar"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-5">
+              <div>
+                <label className="text-sm font-medium theme-text-muted">Plan</label>
+                <select
+                  value={creditPlan}
+                  onChange={(e) => setCreditPlan(e.target.value as PlanVozAdmin)}
+                  className="mt-2 w-full rounded-lg border border-zinc-800/80 bg-[#111111] px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                >
+                  {PLAN_VOZ_OPTIONS.map((p) => (
+                    <option key={p} value={p}>
+                      {planVozLabel(p)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium theme-text-muted">Minutos actuales</label>
+                <div className="mt-2 rounded-lg border border-zinc-800/80 bg-[#111111] px-3 py-2.5 text-sm text-zinc-300">
+                  {creditInitialMinutos}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium theme-text-muted">Minutos a agregar</label>
+                <div className="mt-2 flex flex-wrap items-stretch gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={creditMinutosAgregar}
+                    onChange={(e) => setCreditMinutosAgregar(e.target.value)}
+                    placeholder="ej: 100"
+                    className="min-w-[120px] flex-1 rounded-lg border border-zinc-800/80 bg-[#0b0b0b] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyCreditMinutosAgregar}
+                    className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-200 hover:bg-zinc-700"
+                  >
+                    + Agregar
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium theme-text-muted">Minutos totales</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={creditMinutosTotales}
+                  onChange={(e) => setCreditMinutosTotales(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                  className="mt-2 w-full rounded-lg border border-zinc-800/80 bg-[#0b0b0b] px-3 py-2.5 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium theme-text-muted">SMS actuales</label>
+                <div className="mt-2 rounded-lg border border-zinc-800/80 bg-[#111111] px-3 py-2.5 text-sm text-zinc-300">
+                  {creditInitialSms}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium theme-text-muted">SMS a agregar</label>
+                <div className="mt-2 flex flex-wrap items-stretch gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={creditSmsAgregar}
+                    onChange={(e) => setCreditSmsAgregar(e.target.value)}
+                    placeholder="ej: 50"
+                    className="min-w-[120px] flex-1 rounded-lg border border-zinc-800/80 bg-[#0b0b0b] px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                  />
+                  <button
+                    type="button"
+                    onClick={applyCreditSmsAgregar}
+                    className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-200 hover:bg-zinc-700"
+                  >
+                    + Agregar
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium theme-text-muted">Nota interna</label>
+                <textarea
+                  value={creditNota}
+                  onChange={(e) => setCreditNota(e.target.value)}
+                  rows={3}
+                  placeholder="Opcional — motivo del ajuste…"
+                  className="mt-2 w-full resize-none rounded-lg border border-zinc-800/80 bg-[#0b0b0b] px-3 py-2.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex justify-end gap-2 border-t border-zinc-800/60 pt-5">
+              <button
+                type="button"
+                onClick={() => setCreditsModalUser(null)}
+                className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={saveCreditsAdjust}
+                disabled={savingCreditsAdjust}
+                className="rounded-lg bg-[#22c55e] px-5 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] disabled:opacity-60"
+              >
+                {savingCreditsAdjust ? 'Guardando…' : 'Guardar'}
               </button>
             </div>
           </div>

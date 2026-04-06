@@ -551,6 +551,16 @@ export default function Contacts() {
     ;(async () => {
       try {
         const userId = await getUserIdOrThrow()
+        const user = { id: userId }
+        const { data: dbgU, error: dbgUErr } = await supabase
+          .from('users')
+          .select('id, es_admin, onboarding_completado, nombre')
+          .eq('id', user.id)
+          .maybeSingle()
+        // eslint-disable-next-line no-console
+        console.log('users data:', dbgU)
+        // eslint-disable-next-line no-console
+        console.log('users error:', dbgUErr)
         const [seqRes, userRes, creditsRes] = await Promise.all([
           supabase
             .from('sequences')
@@ -560,6 +570,10 @@ export default function Contacts() {
           supabase.from('users').select('google_review_link').eq('id', userId).maybeSingle(),
           supabase.from('credits').select('plan_voz').eq('user_id', userId).maybeSingle(),
         ])
+        // eslint-disable-next-line no-console
+        console.log('users data:', userRes.data)
+        // eslint-disable-next-line no-console
+        console.log('users error:', userRes.error)
         setSequencesList((seqRes.data ?? []) as SequenceOption[])
         const grl = (userRes.data as { google_review_link?: string } | null)?.google_review_link ?? ''
         setAssignGoogleReviewLink(grl)

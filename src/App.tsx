@@ -9,6 +9,7 @@ import {
 } from 'react-router-dom'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
+import { parseEsAdmin } from './lib/esAdmin'
 import { Layout } from './components/Layout'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
@@ -71,19 +72,33 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let mounted = true
-    supabase.auth.getSession().then(async ({ data }) => {
-      const uid = data.session?.user?.id
-      if (!uid) {
+    ;(async () => {
+      const {
+        data: { user: authUser },
+        error: authErr,
+      } = await supabase.auth.getUser()
+      const uid = authUser?.id
+      if (authErr || !uid) {
         if (mounted) setAllowed(false)
         return
       }
-      const { data: row } = await supabase
+      const { data, error } = await supabase
         .from('users')
-        .select('es_admin')
+        .select('id, es_admin, onboarding_completado, nombre')
         .eq('id', uid)
         .maybeSingle()
-      if (mounted) setAllowed(row?.es_admin === true)
-    })
+      // eslint-disable-next-line no-console
+      console.log('users data:', data)
+      // eslint-disable-next-line no-console
+      console.log('users error:', error)
+      if (!mounted) return
+      if (error) {
+        if (import.meta.env.DEV) console.warn('[RequireAdmin]', error.message)
+        setAllowed(false)
+        return
+      }
+      setAllowed(parseEsAdmin(data?.es_admin))
+    })()
     return () => {
       mounted = false
     }

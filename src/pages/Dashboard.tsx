@@ -96,6 +96,16 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, es_admin, onboarding_completado, nombre')
+        .eq('id', user.id)
+        .maybeSingle()
+      // eslint-disable-next-line no-console
+      console.log('users data:', data)
+      // eslint-disable-next-line no-console
+      console.log('users error:', error)
+
       const hoy = new Date()
       hoy.setHours(0, 0, 0, 0)
       const manana = new Date(hoy)
@@ -104,11 +114,15 @@ export default function Dashboard() {
       inicioSemana.setDate(hoy.getDate() - 6)
 
       // Nombre de empresa (para saludo)
-      const { data: userRow } = await supabase
+      const { data: userRow, error: userRowErr } = await supabase
         .from('users')
         .select('company_name')
         .eq('id', user.id)
         .maybeSingle()
+      // eslint-disable-next-line no-console
+      console.log('users data:', userRow)
+      // eslint-disable-next-line no-console
+      console.log('users error:', userRowErr)
       setCompanyName(userRow?.company_name?.trim() ?? '')
 
       const { data: credits } = await supabase

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { ensureUserRow, isOnboardingDone } from '../lib/onboardingGate'
 import { KRONE_BRAND_ICON } from '../utils/logos'
 
 export default function Login() {
@@ -24,15 +25,25 @@ export default function Login() {
       if (!mounted) return
       if (!session?.user?.id) return
 
-      const userId = session.user.id
+      const user = session.user
+      await ensureUserRow(user.id, session.user.email)
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, es_admin, onboarding_completado, nombre')
+        .eq('id', user.id)
+        .maybeSingle()
+      // eslint-disable-next-line no-console
+      console.log('users data:', data)
+      // eslint-disable-next-line no-console
+      console.log('users error:', error)
       const { data: userRow } = await supabase
         .from('users')
         .select('onboarding_completado, nicho')
-        .eq('id', userId)
+        .eq('id', user.id)
         .maybeSingle()
 
       if (!mounted) return
-      if (userRow && (userRow.onboarding_completado || userRow.nicho)) {
+      if (isOnboardingDone(userRow)) {
         navigate('/dashboard', { replace: true })
       } else {
         const ref = new URLSearchParams(window.location.search).get('ref') || sessionStorage.getItem('krone_ref')
@@ -72,13 +83,24 @@ export default function Login() {
         return
       }
 
+      const user = session.user
+      await ensureUserRow(userId, session?.user?.email)
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, es_admin, onboarding_completado, nombre')
+        .eq('id', user.id)
+        .maybeSingle()
+      // eslint-disable-next-line no-console
+      console.log('users data:', data)
+      // eslint-disable-next-line no-console
+      console.log('users error:', error)
       const { data: userRow } = await supabase
         .from('users')
         .select('onboarding_completado, nicho')
-        .eq('id', userId)
+        .eq('id', user.id)
         .maybeSingle()
 
-      if (userRow && (userRow.onboarding_completado || userRow.nicho)) {
+      if (isOnboardingDone(userRow)) {
         navigate('/dashboard', { replace: true })
       } else {
         const ref = new URLSearchParams(window.location.search).get('ref') || sessionStorage.getItem('krone_ref')

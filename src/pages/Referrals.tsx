@@ -59,7 +59,18 @@ export default function Referrals() {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       const userId = session?.user?.id
-      if (!userId) return
+      const user = session?.user
+      if (!userId || !user) return
+
+      const { data: dbgU, error: dbgUErr } = await supabase
+        .from('users')
+        .select('id, es_admin, onboarding_completado, nombre')
+        .eq('id', user.id)
+        .maybeSingle()
+      // eslint-disable-next-line no-console
+      console.log('users data:', dbgU)
+      // eslint-disable-next-line no-console
+      console.log('users error:', dbgUErr)
 
       const [userRes, creditsRes, refListRes, transRes] = await Promise.all([
         supabase.from('users').select('referral_code').eq('id', userId).maybeSingle(),
@@ -67,6 +78,11 @@ export default function Referrals() {
         supabase.rpc('get_my_referrals_with_details') as Promise<{ data: ReferralRow[] | null }>,
         supabase.rpc('get_my_referral_transactions') as Promise<{ data: TransactionRow[] | null }>,
       ])
+
+      // eslint-disable-next-line no-console
+      console.log('users data:', userRes.data)
+      // eslint-disable-next-line no-console
+      console.log('users error:', userRes.error)
 
       if (userRes.data?.referral_code) setReferralCode(userRes.data.referral_code)
       const saldo = creditsRes.data?.saldo_referidos_usd

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { ensureUserRow, isOnboardingDone } from '../lib/onboardingGate'
 
 type NichoFromDb = {
   nicho: string
@@ -159,12 +160,27 @@ export default function Onboarding() {
         if (sessionError) throw new Error(sessionError.message)
         const userId = session?.user?.id
         if (!userId) { navigate('/login', { replace: true }); return }
+        await ensureUserRow(userId, session.user.email)
+        const user = session.user
+        const { data, error: dbgErr } = await supabase
+          .from('users')
+          .select('id, es_admin, onboarding_completado, nombre')
+          .eq('id', user.id)
+          .maybeSingle()
+        // eslint-disable-next-line no-console
+        console.log('users data:', data)
+        // eslint-disable-next-line no-console
+        console.log('users error:', dbgErr)
         const { data: userRow, error: userError } = await supabase
           .from('users').select('company_name, nicho, onboarding_completado').eq('id', userId).maybeSingle()
+        // eslint-disable-next-line no-console
+        console.log('users data:', userRow)
+        // eslint-disable-next-line no-console
+        console.log('users error:', userError)
         if (userError) throw userError
         if (!mounted) return
         if (userRow?.company_name) setCompanyName(userRow.company_name)
-        if (userRow?.nicho || userRow?.onboarding_completado) { navigate('/dashboard', { replace: true }); return }
+        if (isOnboardingDone(userRow)) { navigate('/dashboard', { replace: true }); return }
       } catch { /* dejamos seguir */ } finally {
         if (mounted) setLoadingInitial(false)
       }
@@ -200,7 +216,9 @@ export default function Onboarding() {
       const { data: { session } } = await supabase.auth.getSession()
       const userId = session?.user?.id
       if (!userId) throw new Error('No hay sesión activa.')
-      await supabase.from('users').update({ company_name: companyName.trim() }).eq('id', userId)
+      await ensureUserRow(userId, session.user.email)
+      const { error: upErr } = await supabase.from('users').update({ company_name: companyName.trim() }).eq('id', userId)
+      if (upErr) throw new Error(upErr.message)
       setStep(2)
     } catch (e) { setError(e instanceof Error ? e.message : 'Error al guardar la empresa.') }
   }
@@ -222,7 +240,15 @@ export default function Onboarding() {
   async function saveReferralIfRef(referredUserId: string) {
     if (!refCode?.trim()) return
     try {
-      const { data: referrer } = await supabase.from('users').select('id').eq('referral_code', refCode.trim()).maybeSingle()
+      const { data: referrer, error: referrerErr } = await supabase
+        .from('users')
+        .select('id')
+        .eq('referral_code', refCode.trim())
+        .maybeSingle()
+      // eslint-disable-next-line no-console
+      console.log('users data:', referrer)
+      // eslint-disable-next-line no-console
+      console.log('users error:', referrerErr)
       if (!referrer?.id) return
       await supabase.from('users').update({ referred_by: referrer.id }).eq('id', referredUserId)
       await supabase.from('referrals').upsert(
@@ -242,7 +268,12 @@ export default function Onboarding() {
       const userId = session?.user?.id
       if (!userId) throw new Error('No hay sesión activa.')
       await saveReferralIfRef(userId)
-      await supabase.from('users').update({ nicho: nichoKey, onboarding_completado: true }).eq('id', userId)
+      await ensureUserRow(userId, session.user.email)
+      const { error: upErr } = await supabase
+        .from('users')
+        .update({ nicho: nichoKey, onboarding_completado: true })
+        .eq('id', userId)
+      if (upErr) throw new Error(upErr.message)
       navigate('/dashboard', { replace: true })
     } catch (e) { setError(e instanceof Error ? e.message : 'Error al guardar.') }
     finally { setSaving(false) }
@@ -345,8 +376,14 @@ Responde ÚNICAMENTE con JSON válido sin markdown:
       const userId = session?.user?.id
       if (!userId) throw new Error('No hay sesión activa.')
       await saveReferralIfRef(userId)
-      await supabase.from('nicho_templates').insert(template)
-      await supabase.from('users').update({ nicho: template.nicho, onboarding_completado: true }).eq('id', userId)
+      await ensureUserRow(userId, session.user.email)
+      const { error: tplErr } = await supabase.from('nicho_templates').insert(template)
+      if (tplErr) throw new Error(tplErr.message)
+      const { error: upErr } = await supabase
+        .from('users')
+        .update({ nicho: template.nicho, onboarding_completado: true })
+        .eq('id', userId)
+      if (upErr) throw new Error(upErr.message)
       navigate('/dashboard', { replace: true })
     } catch (e) { setError(e instanceof Error ? e.message : 'Error al guardar.') }
     finally { setSaving(false) }

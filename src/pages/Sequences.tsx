@@ -345,6 +345,18 @@ export default function Sequences() {
     setAssignReferido('')
     setAssignError(null)
     const userId = await getUserId()
+    if (userId) {
+      const user = { id: userId }
+      const { data: dbgU, error: dbgUErr } = await supabase
+        .from('users')
+        .select('id, es_admin, onboarding_completado, nombre')
+        .eq('id', user.id)
+        .maybeSingle()
+      // eslint-disable-next-line no-console
+      console.log('users data:', dbgU)
+      // eslint-disable-next-line no-console
+      console.log('users error:', dbgUErr)
+    }
     const [contactsRes, stepsRes, userRes] = await Promise.all([
       supabase.from('contacts').select('id, nombre').eq('user_id', userId).order('nombre'),
       supabase
@@ -354,6 +366,10 @@ export default function Sequences() {
         .order('orden', { ascending: true }),
       supabase.from('users').select('google_review_link').eq('id', userId).maybeSingle(),
     ])
+    // eslint-disable-next-line no-console
+    console.log('users data:', userRes.data)
+    // eslint-disable-next-line no-console
+    console.log('users error:', userRes.error)
     const steps = (stepsRes.data ?? []) as SequenceStep[]
     setAssignSteps(steps)
     setAssignContacts((contactsRes.data ?? []) as { id: string; nombre: string | null }[])

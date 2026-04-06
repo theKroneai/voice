@@ -135,14 +135,25 @@ export default function Settings() {
         const userId = session.user.id
         const emailFromAuth = session.user.email ?? ''
 
+        const user = session.user
+        const { data: dbgUsers, error: dbgUsersErr } = await supabase
+          .from('users')
+          .select('id, es_admin, onboarding_completado, nombre')
+          .eq('id', user.id)
+          .maybeSingle()
+        // eslint-disable-next-line no-console
+        console.log('users data:', dbgUsers)
+        // eslint-disable-next-line no-console
+        console.log('users error:', dbgUsersErr)
+
         const [
-          { data: userRow },
-          { data: nichosData },
-          { data: credits },
-          { data: tx },
-          { data: integ },
-          { data: techs },
-          { data: inboundAgent },
+          usersProfileRes,
+          nichosRes,
+          creditsRes,
+          txRes,
+          integRes,
+          techsRes,
+          inboundRes,
         ] = await Promise.all([
           supabase
             .from('users')
@@ -181,6 +192,18 @@ export default function Settings() {
         ])
 
         if (!mounted) return
+        const userRow = usersProfileRes.data
+        // eslint-disable-next-line no-console
+        console.log('users data:', userRow)
+        // eslint-disable-next-line no-console
+        console.log('users error:', usersProfileRes.error)
+        const nichosData = nichosRes.data
+        const credits = creditsRes.data
+        const tx = txRes.data
+        const integ = integRes.data
+        const techs = techsRes.data
+        const inboundAgent = inboundRes.data
+
         setProfile({
           company_name: userRow?.company_name ?? '',
           nicho: userRow?.nicho ?? '',

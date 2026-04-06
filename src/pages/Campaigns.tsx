@@ -357,7 +357,17 @@ export default function Campaigns() {
     ;(async () => {
       try {
         const userId = await getUserIdOrThrow()
-        const [{ data: userRow }, { data: nichosData }] = await Promise.all([
+        const user = { id: userId }
+        const { data: dbgU, error: dbgUErr } = await supabase
+          .from('users')
+          .select('id, es_admin, onboarding_completado, nombre')
+          .eq('id', user.id)
+          .maybeSingle()
+        // eslint-disable-next-line no-console
+        console.log('users data:', dbgU)
+        // eslint-disable-next-line no-console
+        console.log('users error:', dbgUErr)
+        const [userRes, nichosRes] = await Promise.all([
           supabase.from('users').select('nicho').eq('id', userId).maybeSingle(),
           supabase
             .from('nicho_templates')
@@ -366,10 +376,15 @@ export default function Campaigns() {
         ])
 
         if (!mounted) return
+        // eslint-disable-next-line no-console
+        console.log('users data:', userRes.data)
+        // eslint-disable-next-line no-console
+        console.log('users error:', userRes.error)
 
+        const nichosData = nichosRes.data
         const list = (nichosData ?? []) as NichoTemplate[]
         setNichos(list)
-        const userNicho = userRow?.nicho ?? null
+        const userNicho = userRes.data?.nicho ?? null
         setUserDefaultNicho(userNicho)
 
         if (userNicho && list.length > 0) {
