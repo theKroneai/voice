@@ -150,11 +150,11 @@ export function HelpChat() {
     }
   }, [open])
 
-  const sendViaN8n = useCallback(async (userText: string, history: ChatMessage[]) => {
-    const base = import.meta.env.VITE_N8N_URL?.trim()
-    if (!base) {
+  const sendViaOpenRouter = useCallback(async (userText: string, history: ChatMessage[]) => {
+    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY?.trim()
+    if (!apiKey) {
       return {
-        text: 'No hay URL de n8n configurada (VITE_N8N_URL). Añádela en el entorno para usar el asistente.',
+        text: 'No hay clave de OpenRouter (VITE_OPENROUTER_API_KEY). Configúrala en el entorno para usar el asistente.',
         raw: '',
       }
     }
@@ -164,54 +164,48 @@ export function HelpChat() {
       { id: '', role: 'user', content: userText },
     ]).map((m) => ({ role: m.role, content: m.content }))
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    const root = base.replace(/\/$/, '')
-    const webhookUrl = `${root}/webhook/krone-chat`
-
     let res: Response
     try {
-      res = await fetch(webhookUrl, {
+      res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://voice.thekroneai.com',
+          'X-Title': 'Krone Agent AI',
+        },
         body: JSON.stringify({
+          model: 'anthropic/claude-haiku-4.5',
+          max_tokens: 1000,
           messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...conversationHistory],
-          user_id: user?.id ?? null,
-          pagina: typeof window !== 'undefined' ? window.location.pathname : null,
         }),
       })
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error)
-      if (
-        (msg.includes('CORS') || msg.includes('Failed to fetch')) &&
-        typeof window !== 'undefined' &&
-        window.location.hostname === 'localhost'
-      ) {
-        return {
-          text:
-            'Chat disponible en producción. En desarrollo usar voice.thekroneai.com',
-          raw: '',
-        }
-      }
       return {
         text: `No pude conectar con el asistente (${msg}).`,
         raw: '',
       }
     }
 
+    const data = (await res.json()) as {
+      choices?: Array<{ message?: { content?: string } }>
+      error?: { message?: string }
+    }
+
     if (!res.ok) {
-      const errText = await res.text().catch(() => '')
+      const errMsg = data.error?.message?.trim() || 'Error desconocido'
       return {
-        text: `No pude conectar con el asistente (${res.status}). ${errText.slice(0, 120)}`,
+        text: `No pude conectar con el asistente (${res.status}). ${errMsg}`,
         raw: '',
       }
     }
 
-    const data = (await res.json()) as { respuesta?: string }
-    const raw = data.respuesta?.trim() ?? ''
-    return { text: raw || 'Sin respuesta.', raw }
+    const respuesta = data.choices?.[0]?.message?.content?.trim() ?? ''
+    if (!respuesta && data.error?.message) {
+      return { text: data.error.message, raw: '' }
+    }
+    return { text: respuesta || 'Sin respuesta.', raw: respuesta }
   }, [])
 
   const tryCreateTicket = useCallback(async (rawResponse: string) => {
@@ -266,7 +260,7 @@ export function HelpChat() {
     setLoading(true)
 
     try {
-      const { text: rawReply, raw } = await sendViaN8n(trimmed, prior)
+      const { text: rawReply, raw } = await sendViaOpenRouter(trimmed, prior)
       const ticketNote = await tryCreateTicket(raw || rawReply)
       const displayAssistant = stripTicketTag(rawReply)
       const finalContent = ticketNote
