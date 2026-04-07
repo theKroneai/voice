@@ -11,6 +11,8 @@ import type { Session } from '@supabase/supabase-js'
 import { supabase } from './lib/supabase'
 import { parseEsAdmin } from './lib/esAdmin'
 import { Layout } from './components/Layout'
+import { HelpChat } from './components/HelpChat'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 const Landing = lazy(() => import('./pages/Landing'))
 const Login = lazy(() => import('./pages/Login'))
@@ -126,6 +128,7 @@ function AppRoutes() {
       <Route path="/" element={<Outlet />}>
         <Route index element={<Landing />} />
         <Route path="login" element={<Login />} />
+        <Route path="register" element={<Login />} />
         <Route
           path="onboarding"
           element={
@@ -168,8 +171,11 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AppRoutes />
+        <HelpChat />
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }

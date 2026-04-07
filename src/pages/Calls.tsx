@@ -8,10 +8,11 @@ type CallRow = {
   telefono: string
   disposition: string
   duracion_minutos: number | null
-  costo: number | null
+  costo_usd: number | null
   created_at: string
   transcripcion: string | null
-  notas: string | null
+  resumen: string | null
+  sentiment: string | null
   raw: Record<string, unknown>
 }
 
@@ -47,19 +48,6 @@ const FILTER_ESTADO_OPTIONS = [
 ]
 
 const PAGE_SIZE = 50
-
-function parseNotas(notas: string | null): { contacto: string; telefono: string } {
-  if (!notas || typeof notas !== 'string')
-    return { contacto: 'Llamada Inbound', telefono: '-' }
-  try {
-    const parsed = JSON.parse(notas) as Record<string, unknown>
-    const from = (parsed.from ?? parsed.telefono ?? parsed.phone ?? '') as string
-    const name = (parsed.nombre ?? parsed.contacto ?? parsed.name ?? 'Llamada Inbound') as string
-    return { contacto: name || 'Llamada Inbound', telefono: from || '-' }
-  } catch {
-    return { contacto: 'Llamada Inbound', telefono: '-' }
-  }
-}
 
 export default function Calls() {
   const [calls, setCalls] = useState<CallRow[]>([])
@@ -98,7 +86,7 @@ export default function Calls() {
           ? supabase
               .from('call_logs')
               .select(`
-                id, created_at, duracion_minutos, disposition, campaign_id, notas, transcripcion, costo,
+                id, created_at, duracion_minutos, disposition, campaign_id, resumen, sentiment, transcripcion, costo_usd,
                 contacts (nombre, telefono)
               `)
               .in('campaign_id', campaignIds)
@@ -107,9 +95,10 @@ export default function Calls() {
           : Promise.resolve({ data: [] }),
         supabase
           .from('call_logs')
-          .select('id, created_at, duracion_minutos, disposition, user_id, notas, transcripcion, costo')
+          .select(
+            'id, created_at, duracion_minutos, disposition, user_id, campaign_id, resumen, sentiment, transcripcion, costo_usd',
+          )
           .eq('user_id', userId)
-          .eq('disposition', 'inbound')
           .order('created_at', { ascending: false })
           .limit(500),
       ])
@@ -124,32 +113,41 @@ export default function Calls() {
         telefono: row.contacts?.telefono ?? '-',
         disposition: row.disposition ?? '',
         duracion_minutos: row.duracion_minutos ?? null,
-        costo: row.costo ?? null,
+        costo_usd: row.costo_usd ?? null,
         created_at: row.created_at,
         transcripcion: row.transcripcion ?? null,
-        notas: row.notas ?? null,
+        resumen: row.resumen ?? null,
+        sentiment: row.sentiment ?? null,
         raw: row,
       }))
 
-      const inboundRows: CallRow[] = (inboundRaw as any[]).map((row: any) => {
-        const { contacto, telefono } = parseNotas(row.notas)
-        return {
-          id: row.id,
-          tipo: 'inbound',
-          contacto,
-          telefono,
-          disposition: row.disposition ?? 'inbound',
-          duracion_minutos: row.duracion_minutos ?? null,
-          costo: row.costo ?? null,
-          created_at: row.created_at,
-          transcripcion: row.transcripcion ?? null,
-          notas: row.notas ?? null,
-          raw: row,
-        }
-      })
+      const outboundIds = new Set(outboundRows.map((r) => r.id))
+      const inboundRows: CallRow[] = (inboundRaw as any[])
+        .filter((row: any) => !outboundIds.has(row.id))
+        .map((row: any) => {
+          const resumen = row.resumen != null ? String(row.resumen).trim() : ''
+          return {
+            id: row.id,
+            tipo: 'inbound' as const,
+            contacto: resumen
+              ? resumen.length > 80
+                ? `${resumen.slice(0, 80)}…`
+                : resumen
+              : 'Llamada Inbound',
+            telefono: '-',
+            disposition: row.disposition ?? 'inbound',
+            duracion_minutos: row.duracion_minutos ?? null,
+            costo_usd: row.costo_usd ?? null,
+            created_at: row.created_at,
+            transcripcion: row.transcripcion ?? null,
+            resumen: row.resumen ?? null,
+            sentiment: row.sentiment ?? null,
+            raw: row,
+          }
+        })
 
       const combined = [...outboundRows, ...inboundRows].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       )
       setCalls(combined)
     } catch (e) {
@@ -329,7 +327,7 @@ export default function Calls() {
                         : '—'}
                     </td>
                     <td className="px-5 py-3 theme-text-muted">
-                      {c.costo != null ? `$${Number(c.costo).toFixed(2)}` : '—'}
+                      {c.costo_usd != null ? `$${Number(c.costo_usd).toFixed(2)}` : '—'}
                     </td>
                     <td className="px-5 py-3 theme-text-muted">
                       {new Date(c.created_at).toLocaleString('es-ES', {
@@ -424,9 +422,9 @@ export default function Calls() {
                       ? `${Math.round(detailCall.duracion_minutos)} min`
                       : '—'}
                   </span>
-                  {detailCall.costo != null ? (
+                  {detailCall.costo_usd != null ? (
                     <span className="inline-flex items-center rounded-full bg-zinc-700/40 px-2 py-0.5 text-xs font-medium theme-text-muted">
-                      ${Number(detailCall.costo).toFixed(2)}
+                      ${Number(detailCall.costo_usd).toFixed(2)}
                     </span>
                   ) : null}
                 </div>
@@ -470,11 +468,17 @@ export default function Calls() {
                 <div>
                   <div className="text-xs uppercase tracking-wide text-zinc-500">Costo</div>
                   <div className="mt-1 text-sm theme-text-primary">
-                    {detailCall.costo != null
-                      ? `$${Number(detailCall.costo).toFixed(2)}`
+                    {detailCall.costo_usd != null
+                      ? `$${Number(detailCall.costo_usd).toFixed(2)}`
                       : '—'}
                   </div>
                 </div>
+                {detailCall.sentiment ? (
+                  <div>
+                    <div className="text-xs uppercase tracking-wide text-zinc-500">Sentimiento</div>
+                    <div className="mt-1 text-sm theme-text-primary">{detailCall.sentiment}</div>
+                  </div>
+                ) : null}
               </div>
 
               {detailCall.transcripcion ? (
@@ -488,22 +492,11 @@ export default function Calls() {
                 </div>
               ) : null}
 
-              {detailCall.notas ? (
+              {detailCall.resumen ? (
                 <div>
-                  <div className="text-sm font-semibold theme-text-primary mb-2">Notas</div>
+                  <div className="text-sm font-semibold theme-text-primary mb-2">Resumen</div>
                   <div className="rounded-lg border theme-border/80 theme-bg-base p-4 text-sm theme-text-muted whitespace-pre-wrap">
-                    {(() => {
-                      if (typeof detailCall.notas !== 'string') return String(detailCall.notas)
-                      const s = detailCall.notas.trim()
-                      if (s.startsWith('{') || s.startsWith('[')) {
-                        try {
-                          return JSON.stringify(JSON.parse(detailCall.notas!), null, 2)
-                        } catch {
-                          return detailCall.notas
-                        }
-                      }
-                      return detailCall.notas
-                    })()}
+                    {detailCall.resumen}
                   </div>
                 </div>
               ) : null}

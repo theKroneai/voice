@@ -393,13 +393,11 @@ export default function InboundAgents() {
         supabase
           .from('call_logs')
           .select('*', { count: 'exact', head: true })
-          .eq('user_id', userId)
-          .eq('disposition', 'inbound'),
+          .eq('user_id', userId),
         supabase
           .from('call_logs')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userId)
-          .eq('disposition', 'inbound')
           .gte('created_at', monday.toISOString()),
         supabase
           .from('appointments')

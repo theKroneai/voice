@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   X,
   ChevronDown,
@@ -82,12 +82,72 @@ function planVozLabel(plan: string | null | undefined): string {
 type CallLog = {
   id: string
   user_id: string
-  contacto: string | null
-  duracion: number | null
-  estado: string | null
-  costo: number | null
+  resumen: string | null
+  duracion_minutos: number | null
+  disposition: string | null
+  costo_usd: number | null
   created_at: string
   user_email?: string
+}
+
+type SupportTicketRow = {
+  id: string
+  user_id: string | null
+  descripcion: string
+  pagina: string | null
+  status: string | null
+  respuesta_admin: string | null
+  created_at: string
+  user_email?: string | null
+}
+
+function supportTicketStatusClass(status: string | null | undefined): string {
+  const s = (status ?? 'pendiente').toLowerCase()
+  if (s === 'resuelto') return 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30'
+  if (s === 'en_revision') return 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/30'
+  return 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/35'
+}
+
+type ActivityLogRow = {
+  id: string
+  user_id: string | null
+  accion: string
+  categoria: string
+  pagina: string | null
+  detalle: Record<string, unknown> | null
+  error_mensaje: string | null
+  error_stack: string | null
+  user_agent: string | null
+  created_at: string
+  users?: { email: string | null; nombre: string | null } | null
+}
+
+function formatActivityRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'hace un momento'
+  if (mins < 60) return `hace ${mins} min`
+  const hours = Math.floor(mins / 60)
+  if (hours < 48) return `hace ${hours} h`
+  const days = Math.floor(hours / 24)
+  return `hace ${days} d`
+}
+
+function activityCategoriaBadgeClass(cat: string): string {
+  const c = cat.toLowerCase()
+  const ring = 'ring-1 '
+  if (c === 'auth') return `bg-sky-500/20 text-sky-300 ${ring}ring-sky-500/30`
+  if (c === 'navegacion') return `bg-zinc-600/30 text-zinc-300 ${ring}ring-zinc-500/30`
+  if (c === 'campana') return `bg-emerald-500/20 text-emerald-300 ${ring}ring-emerald-500/30`
+  if (c === 'contacto') return `bg-cyan-500/20 text-cyan-300 ${ring}ring-cyan-500/30`
+  if (c === 'pago') return `bg-amber-500/25 text-amber-200 ${ring}ring-amber-500/35`
+  if (c === 'llamada') return `bg-violet-500/20 text-violet-300 ${ring}ring-violet-500/30`
+  if (c === 'error') return `bg-red-500/20 text-red-300 ${ring}ring-red-500/35`
+  if (c === 'chatbot') return `bg-orange-500/20 text-orange-300 ${ring}ring-orange-500/35`
+  if (c === 'creditos') return `bg-lime-500/15 text-lime-200 ${ring}ring-lime-500/25`
+  if (c === 'secuencia') return `bg-teal-500/20 text-teal-300 ${ring}ring-teal-500/30`
+  if (c === 'integracion') return `bg-indigo-500/20 text-indigo-300 ${ring}ring-indigo-500/30`
+  return `bg-zinc-600/30 text-zinc-300 ${ring}ring-zinc-600/40`
 }
 
 type NichoTemplate = {
@@ -309,6 +369,16 @@ export default function Admin() {
   const [savingTwilio, setSavingTwilio] = useState(false)
   const [twilioError, setTwilioError] = useState<string | null>(null)
   const [twilioSuccess, setTwilioSuccess] = useState(false)
+  const [supportTickets, setSupportTickets] = useState<SupportTicketRow[]>([])
+  const [ticketModal, setTicketModal] = useState<SupportTicketRow | null>(null)
+  const [ticketReply, setTicketReply] = useState('')
+  const [savingTicketReply, setSavingTicketReply] = useState(false)
+  const [activityLogs, setActivityLogs] = useState<ActivityLogRow[]>([])
+  const [activityLogDetailModal, setActivityLogDetailModal] = useState<ActivityLogRow | null>(null)
+  const [activityFilterDays, setActivityFilterDays] = useState<1 | 7 | 30>(7)
+  const [activityFilterCategory, setActivityFilterCategory] = useState<string>('all')
+  const [activityFilterEmail, setActivityFilterEmail] = useState('')
+  const [activityErrorsOnly, setActivityErrorsOnly] = useState(false)
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([])
   const [users, setUsers] = useState<AdminUser[]>([])
   const [callLogs, setCallLogs] = useState<CallLog[]>([])
@@ -376,10 +446,10 @@ export default function Admin() {
         console.log('users error:', error)
         if (!parseEsAdmin(data?.es_admin)) { setError('Acceso denegado'); return }
 
-        const [usersRes, callsRes, callsTodayRes, config, phones, usersData, usersCreditsRes, logs, nichosData, plansData, catalogData] = await Promise.all([
+        const [usersRes, callsRes, callsTodayRes, config, phones, usersData, usersCreditsRes, logs, nichosData, plansData, catalogData, ticketsRes, activityLogsRes] = await Promise.all([
           supabase.from('users').select('*', { count: 'exact', head: true }),
           supabase.from('call_logs').select('*', { count: 'exact', head: true }),
-          supabase.from('call_logs').select('duracion').gte('created_at', new Date().toISOString().slice(0, 10)),
+          supabase.from('call_logs').select('duracion_minutos').gte('created_at', new Date().toISOString().slice(0, 10)),
           supabase
             .from('admin_config')
             .select(
@@ -406,13 +476,41 @@ export default function Admin() {
           `,
             )
             .order('created_at', { ascending: false }),
-          supabase.from('call_logs').select('id, user_id, contacto, duracion, estado, costo, created_at').order('created_at', { ascending: false }).limit(100),
+          supabase
+            .from('call_logs')
+            .select('id, user_id, resumen, duracion_minutos, disposition, costo_usd, created_at')
+            .order('created_at', { ascending: false })
+            .limit(100),
           supabase.from('nicho_templates').select('*').order('nicho'),
           supabase.from('plan_config').select('*').order('precio_por_minuto', { ascending: true }),
           supabase
             .from('crm_integration_catalog')
             .select('id, crm_type, name, description, emoji, logo_url, is_visible, sort_order, badge, badge_color, plan_required')
             .order('sort_order', { ascending: true }),
+          supabase
+            .from('support_tickets')
+            .select('id, user_id, descripcion, pagina, status, respuesta_admin, created_at')
+            .order('created_at', { ascending: false })
+            .limit(500),
+          supabase
+            .from('activity_logs')
+            .select(
+              `
+              id,
+              user_id,
+              accion,
+              categoria,
+              pagina,
+              detalle,
+              error_mensaje,
+              error_stack,
+              user_agent,
+              created_at,
+              users (email, nombre)
+            `,
+            )
+            .order('created_at', { ascending: false })
+            .limit(200),
         ])
 
         if (!mounted) return
@@ -427,7 +525,10 @@ export default function Admin() {
         const totalUsers = usersRes.count ?? 0
         const totalCalls = callsRes.count ?? 0
         const callsToday = callsTodayRes.data ?? []
-        const minutesToday = callsToday.reduce((s, r: { duracion?: number }) => s + (r.duracion ?? 0), 0)
+        const minutesToday = callsToday.reduce(
+          (s, r: { duracion_minutos?: number | null }) => s + (Number(r.duracion_minutos) || 0),
+          0,
+        )
 
         const configRow = config?.data as {
           id?: string
@@ -519,6 +620,32 @@ export default function Admin() {
             badge_color: row.badge_color ?? (defaults.badge_color as string | null) ?? null,
           } as CrmCatalogRow
         }))
+
+        if (ticketsRes.error) {
+          if (import.meta.env.DEV) console.warn('[Admin] support_tickets:', ticketsRes.error.message)
+          setSupportTickets([])
+        } else {
+          const ticketsRaw = (ticketsRes.data ?? []) as SupportTicketRow[]
+          const ticketUserIds = [...new Set(ticketsRaw.map((t) => t.user_id).filter(Boolean))] as string[]
+          let ticketEmailMap = new Map<string, string | null>()
+          if (ticketUserIds.length > 0) {
+            const { data: ticketUsers } = await supabase.from('users').select('id, email').in('id', ticketUserIds)
+            ticketEmailMap = new Map((ticketUsers ?? []).map((r: { id: string; email: string | null }) => [r.id, r.email]))
+          }
+          setSupportTickets(
+            ticketsRaw.map((t) => ({
+              ...t,
+              user_email: t.user_id ? ticketEmailMap.get(t.user_id) ?? null : null,
+            })),
+          )
+        }
+
+        if (activityLogsRes.error) {
+          if (import.meta.env.DEV) console.warn('[Admin] activity_logs:', activityLogsRes.error.message)
+          setActivityLogs([])
+        } else {
+          setActivityLogs((activityLogsRes.data ?? []) as ActivityLogRow[])
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al cargar')
       } finally {
@@ -603,6 +730,34 @@ export default function Admin() {
     } catch (e) {
       // por ahora silencioso; se podría mostrar toast
       console.error(e)
+    }
+  }
+
+  async function saveTicketResponse() {
+    if (!ticketModal || !ticketReply.trim()) return
+    setSavingTicketReply(true)
+    try {
+      const { error } = await supabase
+        .from('support_tickets')
+        .update({
+          status: 'resuelto',
+          respuesta_admin: ticketReply.trim(),
+        })
+        .eq('id', ticketModal.id)
+      if (error) throw error
+      setSupportTickets((prev) =>
+        prev.map((t) =>
+          t.id === ticketModal.id
+            ? { ...t, status: 'resuelto', respuesta_admin: ticketReply.trim() }
+            : t,
+        ),
+      )
+      setTicketModal(null)
+      setTicketReply('')
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSavingTicketReply(false)
     }
   }
 
@@ -873,6 +1028,50 @@ export default function Admin() {
     }
   }
 
+  const activityFilteredLogs = useMemo(() => {
+    const now = Date.now()
+    let cutoff: number
+    if (activityFilterDays === 1) {
+      const d = new Date()
+      d.setHours(0, 0, 0, 0)
+      cutoff = d.getTime()
+    } else {
+      cutoff = now - activityFilterDays * 24 * 60 * 60 * 1000
+    }
+    const emailQ = activityFilterEmail.trim().toLowerCase()
+    return activityLogs.filter((row) => {
+      const t = new Date(row.created_at).getTime()
+      if (t < cutoff) return false
+      if (activityFilterCategory !== 'all' && row.categoria !== activityFilterCategory) return false
+      if (activityErrorsOnly && row.categoria !== 'error' && !row.error_mensaje) return false
+      if (emailQ) {
+        const em = (row.users?.email ?? '').toLowerCase()
+        if (!em.includes(emailQ)) return false
+      }
+      return true
+    })
+  }, [
+    activityLogs,
+    activityFilterDays,
+    activityFilterCategory,
+    activityFilterEmail,
+    activityErrorsOnly,
+  ])
+
+  const activityStats = useMemo(() => {
+    const startDay = new Date()
+    startDay.setHours(0, 0, 0, 0)
+    const dayMs = startDay.getTime()
+    const today = activityLogs.filter((r) => new Date(r.created_at).getTime() >= dayMs)
+    const err = today.filter((r) => r.categoria === 'error' || Boolean(r.error_mensaje)).length
+    const logins = today.filter((r) => r.accion === 'login_exitoso').length
+    const recargas = today.filter(
+      (r) => r.accion === 'recarga_exitosa' || r.accion === 'recarga_iniciada',
+    ).length
+    const activeUsers = new Set(today.map((r) => r.user_id).filter(Boolean)).size
+    return { err, logins, recargas, activeUsers }
+  }, [activityLogs])
+
   if (loading) return <div className="flex items-center justify-center py-12"><span className="text-sm theme-text-muted">Cargando panel admin...</span></div>
   if (error) return <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">{error}. Solo usuarios administradores pueden acceder.</div>
 
@@ -923,6 +1122,231 @@ export default function Admin() {
             <div className="text-2xl font-semibold theme-text-primary">{m.value}</div>
           </div>
         ))}
+      </div>
+
+      {/* Tickets de soporte */}
+      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
+        <h2 className="text-base font-semibold theme-text-primary">Tickets de soporte</h2>
+        <p className="mt-1 text-sm theme-text-muted">
+          Enviados desde el asistente Krone AI (HelpChat). Ejecuta{' '}
+          <code className="rounded bg-zinc-900 px-1 text-xs">supabase-migrations-support-tickets.sql</code> si la tabla no existe.
+        </p>
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 text-xs theme-text-dim">
+                <th className="pb-2 pr-2 font-medium">#</th>
+                <th className="pb-2 pr-2 font-medium">Usuario</th>
+                <th className="pb-2 pr-2 font-medium">Descripción</th>
+                <th className="pb-2 pr-2 font-medium">Página</th>
+                <th className="pb-2 pr-2 font-medium">Estado</th>
+                <th className="pb-2 pr-2 font-medium">Fecha</th>
+                <th className="pb-2 font-medium">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {supportTickets.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-zinc-500">
+                    No hay tickets todavía.
+                  </td>
+                </tr>
+              ) : (
+                supportTickets.map((t) => (
+                  <tr key={t.id} className="border-b border-zinc-800/60 theme-text-muted">
+                    <td className="py-2 pr-2 align-top font-mono text-xs text-zinc-400" title={t.id}>
+                      {t.id.slice(0, 8)}…
+                    </td>
+                    <td className="py-2 pr-2 align-top text-xs">
+                      {t.user_email ?? (t.user_id ? `${t.user_id.slice(0, 8)}…` : 'Invitado')}
+                    </td>
+                    <td className="py-2 pr-2 align-top text-xs max-w-[200px] truncate" title={t.descripcion}>
+                      {t.descripcion}
+                    </td>
+                    <td className="py-2 pr-2 align-top text-xs font-mono">{t.pagina ?? '—'}</td>
+                    <td className="py-2 pr-2 align-top">
+                      <span
+                        className={
+                          'inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ' +
+                          supportTicketStatusClass(t.status)
+                        }
+                      >
+                        {t.status ?? 'pendiente'}
+                      </span>
+                    </td>
+                    <td className="py-2 pr-2 align-top text-xs whitespace-nowrap">
+                      {new Date(t.created_at).toLocaleString('es')}
+                    </td>
+                    <td className="py-2 align-top">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTicketModal(t)
+                          setTicketReply(t.respuesta_admin ?? '')
+                        }}
+                        className="rounded-lg bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-200 hover:bg-zinc-700"
+                      >
+                        Responder
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Logs de actividad */}
+      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
+        <h2 className="text-base font-semibold theme-text-primary">Logs de actividad</h2>
+        <p className="mt-1 text-sm theme-text-muted">
+          Eventos registrados desde la app (auth, campañas, contactos, pagos, chatbot, errores). En producción conviene
+          retener como máximo ~90 días (limpieza periódica en base de datos).
+        </p>
+        <p className="mt-1 text-xs text-zinc-600">
+          Ejecuta <code className="rounded bg-zinc-900 px-1">supabase-migrations-activity-logs.sql</code> si la tabla no existe.
+        </p>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs">
+            <span className="text-zinc-500">Errores hoy:</span>{' '}
+            <span className="font-semibold text-red-300">{activityStats.err}</span>
+          </div>
+          <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-xs">
+            <span className="text-zinc-500">Logins hoy:</span>{' '}
+            <span className="font-semibold text-sky-300">{activityStats.logins}</span>
+          </div>
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs">
+            <span className="text-zinc-500">Recargas hoy:</span>{' '}
+            <span className="font-semibold text-amber-200">{activityStats.recargas}</span>
+          </div>
+          <div className="rounded-xl border border-[#22c55e]/30 bg-[#22c55e]/10 px-3 py-2 text-xs">
+            <span className="text-zinc-500">Usuarios activos (hoy):</span>{' '}
+            <span className="font-semibold text-[#86efac]">{activityStats.activeUsers}</span>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-xs theme-text-dim">Rango</label>
+            <select
+              value={activityFilterDays}
+              onChange={(e) => setActivityFilterDays(Number(e.target.value) as 1 | 7 | 30)}
+              className="mt-1 block rounded-lg theme-bg-base px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-zinc-800"
+            >
+              <option value={1}>Hoy</option>
+              <option value={7}>Últimos 7 días</option>
+              <option value={30}>Últimos 30 días</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-xs theme-text-dim">Categoría</label>
+            <select
+              value={activityFilterCategory}
+              onChange={(e) => setActivityFilterCategory(e.target.value)}
+              className="mt-1 block rounded-lg theme-bg-base px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-zinc-800"
+            >
+              <option value="all">Todas</option>
+              <option value="auth">auth</option>
+              <option value="navegacion">navegacion</option>
+              <option value="campana">campana</option>
+              <option value="contacto">contacto</option>
+              <option value="pago">pago</option>
+              <option value="llamada">llamada</option>
+              <option value="error">error</option>
+              <option value="chatbot">chatbot</option>
+              <option value="creditos">creditos</option>
+              <option value="secuencia">secuencia</option>
+              <option value="integracion">integracion</option>
+            </select>
+          </div>
+          <div className="min-w-[180px] flex-1">
+            <label className="text-xs theme-text-dim">Usuario (email contiene)</label>
+            <input
+              type="text"
+              value={activityFilterEmail}
+              onChange={(e) => setActivityFilterEmail(e.target.value)}
+              placeholder="correo…"
+              className="mt-1 w-full rounded-lg theme-bg-base px-2 py-1.5 text-sm text-zinc-100 ring-1 ring-zinc-800"
+            />
+          </div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm theme-text-muted">
+            <input
+              type="checkbox"
+              checked={activityErrorsOnly}
+              onChange={(e) => setActivityErrorsOnly(e.target.checked)}
+              className="rounded border-zinc-600"
+            />
+            Solo errores
+          </label>
+        </div>
+
+        <div className="mt-4 overflow-x-auto">
+          <table className="w-full min-w-[900px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 text-xs theme-text-dim">
+                <th className="pb-2 pr-2 font-medium">Fecha</th>
+                <th className="pb-2 pr-2 font-medium">Usuario</th>
+                <th className="pb-2 pr-2 font-medium">Acción</th>
+                <th className="pb-2 pr-2 font-medium">Categoría</th>
+                <th className="pb-2 pr-2 font-medium">Página</th>
+                <th className="pb-2 font-medium">Detalle</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activityFilteredLogs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-zinc-500">
+                    No hay logs con los filtros actuales.
+                  </td>
+                </tr>
+              ) : (
+                activityFilteredLogs.map((row) => {
+                  const isErr = row.categoria === 'error' || Boolean(row.error_mensaje)
+                  return (
+                    <tr
+                      key={row.id}
+                      className={
+                        'border-b border-zinc-800/60 ' +
+                        (isErr ? 'bg-red-500/5' : '')
+                      }
+                    >
+                      <td className="py-2 pr-2 align-top text-xs text-zinc-400 whitespace-nowrap">
+                        {formatActivityRelativeTime(row.created_at)}
+                      </td>
+                      <td className="py-2 pr-2 align-top text-xs">
+                        {row.users?.email ?? (row.user_id ? `${row.user_id.slice(0, 8)}…` : '—')}
+                      </td>
+                      <td className="py-2 pr-2 align-top">
+                        <span
+                          className={
+                            'inline-flex max-w-[200px] truncate rounded-full px-2 py-0.5 text-[10px] font-semibold ' +
+                            activityCategoriaBadgeClass(row.categoria)
+                          }
+                          title={row.accion}
+                        >
+                          {row.accion}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-2 align-top text-xs text-zinc-400">{row.categoria}</td>
+                      <td className="py-2 pr-2 align-top font-mono text-xs text-zinc-500">{row.pagina ?? '—'}</td>
+                      <td className="py-2 align-top">
+                        <button
+                          type="button"
+                          onClick={() => setActivityLogDetailModal(row)}
+                          className="rounded-lg bg-zinc-800 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-700"
+                        >
+                          Ver
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* Retell API */}
@@ -1546,10 +1970,14 @@ export default function Admin() {
                 callLogs.map((l) => (
                   <tr key={l.id} className="border-b theme-border/80">
                     <td className="px-3 py-2 theme-text-muted">{l.user_email ?? l.user_id}</td>
-                    <td className="px-3 py-2 theme-text-muted">{l.contacto ?? '—'}</td>
-                    <td className="px-3 py-2 theme-text-muted">{l.duracion ?? 0} min</td>
-                    <td className="px-3 py-2 theme-text-muted">{l.estado ?? '—'}</td>
-                    <td className="px-3 py-2 theme-text-muted">{l.costo != null ? `$${l.costo.toFixed(2)}` : '—'}</td>
+                    <td className="px-3 py-2 theme-text-muted">{l.resumen?.trim() || '—'}</td>
+                    <td className="px-3 py-2 theme-text-muted">
+                      {l.duracion_minutos != null ? `${Number(l.duracion_minutos)} min` : '—'}
+                    </td>
+                    <td className="px-3 py-2 theme-text-muted">{l.disposition ?? '—'}</td>
+                    <td className="px-3 py-2 theme-text-muted">
+                      {l.costo_usd != null ? `$${Number(l.costo_usd).toFixed(2)}` : '—'}
+                    </td>
                     <td className="px-3 py-2 theme-text-muted">{new Date(l.created_at).toLocaleString()}</td>
                   </tr>
                 ))
@@ -1857,6 +2285,105 @@ export default function Admin() {
                 className="rounded-lg bg-[#22c55e] px-5 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] disabled:opacity-60"
               >
                 {savingCreditsAdjust ? 'Guardando…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activityLogDetailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-hidden rounded-2xl border theme-border/80 theme-bg-card shadow-xl">
+            <div className="flex items-start justify-between gap-2 border-b border-zinc-800 px-5 py-4">
+              <h3 className="text-lg font-semibold theme-text-primary">Detalle del log</h3>
+              <button
+                type="button"
+                onClick={() => setActivityLogDetailModal(null)}
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-800"
+                aria-label="Cerrar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="max-h-[calc(85vh-5rem)] overflow-y-auto px-5 py-4">
+              <p className="text-xs text-zinc-500">
+                {activityLogDetailModal.accion} · {activityLogDetailModal.categoria}
+              </p>
+              <pre className="mt-3 overflow-x-auto rounded-lg bg-[#0b0b0b] p-3 text-left text-xs text-zinc-300">
+                {JSON.stringify(
+                  {
+                    id: activityLogDetailModal.id,
+                    user_id: activityLogDetailModal.user_id,
+                    accion: activityLogDetailModal.accion,
+                    categoria: activityLogDetailModal.categoria,
+                    pagina: activityLogDetailModal.pagina,
+                    detalle: activityLogDetailModal.detalle,
+                    error_mensaje: activityLogDetailModal.error_mensaje,
+                    error_stack: activityLogDetailModal.error_stack,
+                    user_agent: activityLogDetailModal.user_agent,
+                    created_at: activityLogDetailModal.created_at,
+                    users: activityLogDetailModal.users,
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ticketModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
+          <div className="w-full max-w-lg rounded-2xl border theme-border/80 theme-bg-card p-5 shadow-xl">
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="text-lg font-semibold theme-text-primary">Responder ticket</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setTicketModal(null)
+                  setTicketReply('')
+                }}
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-800"
+                aria-label="Cerrar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mt-2 text-xs theme-text-dim">ID: {ticketModal.id}</p>
+            <p className="mt-3 text-sm theme-text-muted">
+              <span className="font-medium theme-text-primary">Descripción: </span>
+              {ticketModal.descripcion}
+            </p>
+            <label className="mt-4 block text-sm theme-text-muted" htmlFor="ticket-reply">
+              Respuesta (el ticket pasará a resuelto)
+            </label>
+            <textarea
+              id="ticket-reply"
+              value={ticketReply}
+              onChange={(e) => setTicketReply(e.target.value)}
+              rows={5}
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-[#0b0b0b] px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+              placeholder="Escribe la respuesta para el usuario…"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setTicketModal(null)
+                  setTicketReply('')
+                }}
+                className="rounded-lg bg-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveTicketResponse()}
+                disabled={savingTicketReply || !ticketReply.trim()}
+                className="rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] disabled:opacity-50"
+              >
+                {savingTicketReply ? 'Guardando…' : 'Guardar y resolver'}
               </button>
             </div>
           </div>

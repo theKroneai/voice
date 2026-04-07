@@ -87,7 +87,9 @@ export default function SMS() {
         mensaje: r.mensaje ?? r.message ?? r.body ?? '',
         estado: (r.estado ?? r.status ?? 'pendiente').toLowerCase(),
         created_at: r.created_at,
-        respuesta: r.respuesta ?? r.response_received ?? r.responded,
+        respuesta: Boolean(
+          r.es_respuesta ?? r.respuesta ?? r.response_received ?? r.responded,
+        ),
       }))
 
       setLogs(mapped)
@@ -111,7 +113,7 @@ export default function SMS() {
           .from('sms_logs')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userId)
-          .eq('respuesta', true)
+          .eq('es_respuesta', true)
         if (!rateErr && conRespuesta != null) {
           setTasaRespuesta(Math.round((conRespuesta / totalForRate) * 100))
         } else {

@@ -411,7 +411,7 @@ Reglas:
               Iniciar sesión
             </Link>
             <Link
-              to="/login"
+              to="/register"
               className="rounded-lg theme-accent px-4 py-2 text-sm font-semibold theme-accent-contrast hover:opacity-90 transition"
             >
               Empezar gratis →
@@ -448,7 +448,7 @@ Reglas:
                 Iniciar sesión
               </Link>
               <Link
-                to="/login"
+                to="/register"
                 className="rounded-lg theme-accent py-2 text-center text-sm font-semibold theme-accent-contrast"
                 onClick={() => setMobileMenuOpen(false)}
               >
@@ -954,7 +954,7 @@ Reglas:
             </div>
             <p className="mt-8 text-center text-sm theme-text-dim">
               ¿Tu nicho no está aquí?{' '}
-              <Link to="/login" className="font-medium text-[#22c55e] hover:underline">
+              <Link to="/register" className="font-medium text-[#22c55e] hover:underline">
                 Configura uno personalizado en minutos →
               </Link>
             </p>
@@ -1077,7 +1077,7 @@ Reglas:
                         ))}
                       </ul>
                       <Link
-                        to="/login"
+                        to={plan.plan_id === 'cazador' ? '/login' : '/register'}
                         className={
                           isPopular
                             ? 'mt-6 inline-flex w-full items-center justify-center rounded-xl bg-[#f97316] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#ea6a0f] transition'
@@ -1108,7 +1108,7 @@ Reglas:
                     ))}
                   </ul>
                   <Link
-                    to="/login"
+                    to="/register"
                     className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] transition"
                   >
                     Empezar gratis
@@ -1199,7 +1199,7 @@ Reglas:
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-4 sm:flex-row sm:gap-6">
               <Link
-                to="/login"
+                to="/register"
                 className="inline-flex items-center justify-center rounded-xl bg-[#22c55e] px-8 py-4 text-base font-semibold text-[#0b0b0b] hover:bg-[#1fb455] transition"
               >
                 Crear cuenta gratis →

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { logActivity } from '../lib/activityLogger'
 import { useNavigate } from 'react-router-dom'
 
 type AgentTypeId =
@@ -455,14 +456,26 @@ export default function Campaigns() {
         sms_template: smsEnabled ? (smsTemplate.trim().slice(0, 160) || null) : null,
       }
 
-      const { error: insertError } = await supabase
+      const { data: created, error: insertError } = await supabase
         .from('campaigns')
         .insert(payload)
+        .select('id')
+        .maybeSingle()
 
       if (insertError) {
         setError(insertError.message)
         return
       }
+
+      void logActivity({
+        accion: 'campana_creada',
+        categoria: 'campana',
+        detalle: {
+          id: created?.id,
+          nombre: payload.nombre,
+          nicho: payload.nicho,
+        },
+      })
 
       closeModal()
       await loadCampaigns()
@@ -513,6 +526,11 @@ export default function Campaigns() {
         .eq('id', editingCampaignId)
 
       if (updateError) throw new Error(updateError.message)
+      void logActivity({
+        accion: 'campana_editada',
+        categoria: 'campana',
+        detalle: { id: editingCampaignId, nombre: editNombre.trim() },
+      })
       await loadCampaigns()
       closeEditModal()
       showToast('success', 'Campaña actualizada correctamente')
@@ -535,6 +553,11 @@ export default function Campaigns() {
         .update({ status: 'active' })
         .eq('id', id)
       if (updateError) throw new Error(updateError.message)
+      void logActivity({
+        accion: 'campana_active',
+        categoria: 'campana',
+        detalle: { id },
+      })
       await loadCampaigns()
     } catch (e) {
       setCampaignsError(
@@ -552,6 +575,11 @@ export default function Campaigns() {
         .update({ status: 'paused' })
         .eq('id', id)
       if (updateError) throw new Error(updateError.message)
+      void logActivity({
+        accion: 'campana_paused',
+        categoria: 'campana',
+        detalle: { id },
+      })
       await loadCampaigns()
     } catch (e) {
       setCampaignsError(
@@ -581,8 +609,22 @@ export default function Campaigns() {
         sms_enabled: c.sms_enabled ?? false,
         sms_template: null,
       }
-      const { error: insertError } = await supabase.from('campaigns').insert(payload)
+      const { data: dup, error: insertError } = await supabase
+        .from('campaigns')
+        .insert(payload)
+        .select('id')
+        .maybeSingle()
       if (insertError) throw new Error(insertError.message)
+      void logActivity({
+        accion: 'campana_creada',
+        categoria: 'campana',
+        detalle: {
+          id: dup?.id,
+          nombre: payload.nombre,
+          nicho: payload.nicho,
+          duplicada_desde: c.id,
+        },
+      })
       await loadCampaigns()
     } catch (e) {
       setCampaignsError(

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { BadgeCheck, Loader2, MessageSquare, Phone } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { logActivity, logError } from '../lib/activityLogger'
 import { getPublicWebhookBaseUrl } from '../lib/getPublicWebhookBaseUrl'
 
 type Plan = 'BASICO' | 'PRO' | 'PREMIUM'
@@ -128,6 +129,7 @@ export default function Credits() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [successBanner, setSuccessBanner] = useState(false)
   const [successPaymentInfo, setSuccessPaymentInfo] = useState<{ amount: number; plan: string } | null>(null)
+  const recargaExitosaLoggedRef = useRef(false)
   const [cancelledBanner, setCancelledBanner] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('')
@@ -196,6 +198,19 @@ export default function Credits() {
       setSearchParams({}, { replace: true })
     }
   }, [searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (!successBanner || !successPaymentInfo || recargaExitosaLoggedRef.current) return
+    recargaExitosaLoggedRef.current = true
+    void logActivity({
+      accion: 'recarga_exitosa',
+      categoria: 'pago',
+      detalle: {
+        monto: successPaymentInfo.amount,
+        plan: successPaymentInfo.plan,
+      },
+    })
+  }, [successBanner, successPaymentInfo])
 
   useEffect(() => {
     if (!successBanner) return
@@ -270,6 +285,11 @@ export default function Credits() {
       if (error) throw new Error(error.message)
       setTransactions((data ?? []) as CreditTransaction[])
     } catch (e) {
+      if (e instanceof Error) {
+        void logError(e, 'cargar_transacciones_creditos', {
+          contexto: 'Cargar historial de transacciones en Créditos',
+        })
+      }
       setTransactions([])
       setTransactionsError(
         e instanceof Error ? e.message : 'Error al cargar transacciones.',
@@ -308,6 +328,11 @@ export default function Credits() {
       const json = await res.json().catch(() => ({}))
       const url = json.checkout_url
       if (url) {
+        void logActivity({
+          accion: 'recarga_iniciada',
+          categoria: 'pago',
+          detalle: { monto: amountUsd, plan: planIdForCheckout },
+        })
         window.location.href = url
         return
       }

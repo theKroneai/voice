@@ -25,18 +25,18 @@ type CrmDefinition = {
 type CrmIntegrationRow = {
   id: string
   user_id: string
-  crm_type: CrmType
-  is_connected: boolean
+  crm_tipo: CrmType
+  activo: boolean
   config: Record<string, unknown> | null
 }
 
 type SyncLogRow = {
   id: string
-  crm_type: CrmType
-  event: string
-  contact_name: string | null
-  result: string | null
-  status: string
+  accion: string
+  categoria: string | null
+  pagina: string | null
+  detalle: string | null
+  error_mensaje: string | null
   created_at: string
 }
 
@@ -63,7 +63,6 @@ export default function Integrations() {
   const [modal, setModal] = useState<ModalState>({ open: false, crm: null })
   const [saving, setSaving] = useState(false)
   const [syncLogs, setSyncLogs] = useState<SyncLogRow[]>([])
-  const [syncFilter, setSyncFilter] = useState<'all' | CrmType>('all')
   const [crmCatalog, setCrmCatalog] = useState<CrmDefinition[]>([])
 
   // Formularios por CRM (guardados en memoria mientras el modal está abierto)
@@ -111,12 +110,13 @@ export default function Integrations() {
         const [{ data: rows }, { data: logs }, { data: catalog }, { data: credits }] = await Promise.all([
           supabase
             .from('crm_integrations')
-            .select('id, user_id, crm_type, is_connected, config')
+            .select('id, user_id, crm_tipo, activo, config')
             .eq('user_id', uid),
           supabase
-            .from('crm_sync_logs')
-            .select('id, crm_type, event, contact_name, result, status, created_at')
+            .from('activity_logs')
+            .select('id, accion, categoria, pagina, detalle, error_mensaje, created_at')
             .eq('user_id', uid)
+            .eq('categoria', 'integracion')
             .order('created_at', { ascending: false })
             .limit(50),
           supabase
@@ -154,7 +154,7 @@ export default function Integrations() {
           custom: null,
         }
         ;(rows ?? []).forEach((r) => {
-          const type = r.crm_type as CrmType
+          const type = r.crm_tipo as CrmType
           if (type in map) {
             map[type] = r as CrmIntegrationRow
           }
@@ -313,15 +313,15 @@ export default function Integrations() {
 
       const payload = {
         user_id: userId,
-        crm_type: modal.crm,
-        is_connected: true,
+        crm_tipo: modal.crm,
+        activo: true,
         config,
       }
       const existingId = integrations[modal.crm]?.id
       const { data, error } = await supabase
         .from('crm_integrations')
         .upsert(existingId ? { ...payload, id: existingId } : payload, {
-          onConflict: 'user_id,crm_type',
+          onConflict: 'user_id,crm_tipo',
         })
         .select()
       if (error) throw new Error(error.message)
@@ -338,7 +338,7 @@ export default function Integrations() {
   }
 
   function renderCrmStatus(crm: CrmType) {
-    const connected = integrations[crm]?.is_connected
+    const connected = integrations[crm]?.activo === true
     if (connected) {
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">
@@ -359,11 +359,6 @@ export default function Integrations() {
     if (!incomingWebhookUrl) return
     void navigator.clipboard.writeText(incomingWebhookUrl)
   }
-
-  const filteredLogs = useMemo(() => {
-    if (syncFilter === 'all') return syncLogs
-    return syncLogs.filter((log) => log.crm_type === syncFilter)
-  }, [syncFilter, syncLogs])
 
   // Banner de plan actual (texto simple)
   const planLabel =
@@ -395,7 +390,7 @@ export default function Integrations() {
             </div>
           ) : null}
           {crmCatalog.map((crm) => {
-            const connected = integrations[crm.id]?.is_connected
+            const connected = integrations[crm.id]?.activo === true
             const isBlocked = false // lógica de plan se puede reusar aquí luego
 
             return (

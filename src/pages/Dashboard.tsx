@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarCheck, Clock, Phone, TrendingUp } from 'lucide-react'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from '../lib/supabase'
 import {
   BarChart,
   Bar,
@@ -11,11 +11,6 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts'
-
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-)
 
 type RecentCall = {
   contacto: string
@@ -170,7 +165,6 @@ export default function Dashboard() {
           .from('call_logs')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
-          .eq('disposition', 'inbound')
           .gte('created_at', hoy.toISOString()),
       ])
       const countOutboundHoy = hasCampaigns ? (outboundHoyRes as { count?: number }).count : 0
@@ -192,7 +186,6 @@ export default function Dashboard() {
           .from('call_logs')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', user.id)
-          .eq('disposition', 'inbound')
           .gte('created_at', inicioSemana.toISOString()),
       ])
       const countOutboundSemana = hasCampaigns ? (outboundSemanaRes as { count?: number }).count : 0
@@ -265,7 +258,6 @@ export default function Dashboard() {
           .from('call_logs')
           .select('id')
           .eq('user_id', user.id)
-          .eq('disposition', 'inbound')
           .gte('created_at', hoy.toISOString()),
       ])
       const contactadosOutboundHoy = hasCampaigns ? (contactadosOutboundHoyRes as { count?: number }).count ?? 0 : 0
@@ -282,19 +274,18 @@ export default function Dashboard() {
         hasCampaigns
           ? supabase
               .from('call_logs')
-              .select('costo')
+              .select('costo_usd')
               .in('campaign_id', campaignIds)
               .gte('created_at', hoy.toISOString())
           : Promise.resolve({ data: [] }),
         supabase
           .from('call_logs')
-          .select('costo')
+          .select('costo_usd')
           .eq('user_id', user.id)
-          .eq('disposition', 'inbound')
           .gte('created_at', hoy.toISOString()),
       ])
-      const sumCosto = (arr: { costo?: number | null }[] | null) =>
-        (arr ?? []).reduce((s, r) => s + (Number(r.costo) || 0), 0)
+      const sumCosto = (arr: { costo_usd?: number | null }[] | null) =>
+        (arr ?? []).reduce((s, r) => s + (Number(r.costo_usd) || 0), 0)
       setCostoDia(sumCosto(outboundLogsCosto ?? null) + sumCosto(inboundLogsCosto ?? null))
 
       // Callbacks pendientes (contacts status = callback)
@@ -364,25 +355,15 @@ export default function Dashboard() {
           : Promise.resolve({ data: [] }),
         supabase
           .from('call_logs')
-          .select('created_at, duracion_minutos, disposition, notas')
+          .select(
+            'created_at, duracion_minutos, disposition, resumen, sentiment'
+          )
           .eq('user_id', user.id)
-          .eq('disposition', 'inbound')
           .order('created_at', { ascending: false })
           .limit(10),
       ])
       const recentOutbound = (outboundRecentRes as { data?: unknown[] }).data ?? []
 
-      const parseNotas = (notas: string | null): { contacto: string; telefono: string } => {
-        if (!notas || typeof notas !== 'string') return { contacto: 'Llamada Inbound', telefono: '-' }
-        try {
-          const parsed = JSON.parse(notas) as Record<string, unknown>
-          const from = (parsed.from ?? parsed.telefono ?? parsed.phone ?? '') as string
-          const name = (parsed.nombre ?? parsed.contacto ?? parsed.name ?? 'Llamada Inbound') as string
-          return { contacto: name || 'Llamada Inbound', telefono: from || '-' }
-        } catch {
-          return { contacto: 'Llamada Inbound', telefono: '-' }
-        }
-      }
       const outboundRows: (RecentCall & { _ts: number })[] = (recentOutbound ?? []).map((log: any) => ({
         contacto: log.contacts?.nombre ?? 'Desconocido',
         telefono: log.contacts?.telefono ?? '-',
@@ -401,11 +382,13 @@ export default function Dashboard() {
         _ts: new Date(log.created_at).getTime(),
       }))
       const inboundRows: (RecentCall & { _ts: number })[] = (recentInbound ?? []).map((log: any) => {
-        const { contacto, telefono } = parseNotas(log.notas)
+        const resumen = log.resumen != null ? String(log.resumen).trim() : ''
+        const sentiment = log.sentiment != null ? String(log.sentiment).trim() : ''
+        const estadoBase = log.disposition ?? 'inbound'
         return {
-          contacto,
-          telefono,
-          estado: log.disposition ?? 'inbound',
+          contacto: resumen ? (resumen.length > 80 ? `${resumen.slice(0, 80)}…` : resumen) : 'Llamada Inbound',
+          telefono: '-',
+          estado: sentiment ? `${estadoBase} · ${sentiment}` : estadoBase,
           duracion: log.duracion_minutos
             ? `${Math.round(log.duracion_minutos)} min`
             : '-',
@@ -442,7 +425,6 @@ export default function Dashboard() {
           .from('call_logs')
           .select('created_at')
           .eq('user_id', user.id)
-          .eq('disposition', 'inbound')
           .gte('created_at', hoy.toISOString()),
       ])
       const horaLogsOutbound = (horaOutboundRes as { data?: unknown[] }).data ?? []
@@ -478,7 +460,6 @@ export default function Dashboard() {
           .from('call_logs')
           .select('created_at')
           .eq('user_id', user.id)
-          .eq('disposition', 'inbound')
           .gte('created_at', inicioSemana.toISOString()),
       ])
       const diaLogsOutbound = (diaOutboundRes as { data?: unknown[] }).data ?? []

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Upload, UserPlus, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { logActivity } from '../lib/activityLogger'
 import * as XLSX from 'xlsx'
 import { UpgradePlanModal } from '../components/UpgradePlanModal'
 
@@ -863,6 +864,12 @@ export default function Contacts() {
         if (error) throw new Error(error.message)
       }
 
+      void logActivity({
+        accion: 'contactos_importados_csv',
+        categoria: 'contacto',
+        detalle: { cantidad: mapped.length },
+      })
+
       closeImport()
       await loadContacts(campaignId)
     } catch (e) {
@@ -950,6 +957,11 @@ export default function Contacts() {
         .eq('id', editContact.id)
         .eq('user_id', userId)
       if (error) throw new Error(error.message)
+      void logActivity({
+        accion: 'contacto_editado',
+        categoria: 'contacto',
+        detalle: { id: editContact.id },
+      })
       closeEdit()
       await loadContacts(campaignId)
       setToast({ type: 'success', message: 'Contacto actualizado correctamente' })
