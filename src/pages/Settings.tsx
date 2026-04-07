@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { formatSaldoCreditoConMinutos } from '../lib/creditUsd'
 
@@ -47,6 +47,23 @@ type Technician = {
   zona: string | null
   ciudad: string | null
   activo: boolean | null
+}
+
+type ComplianceAgreementRow = {
+  id: string
+  created_at: string
+  company_name: string
+  business_type: string
+  country: string
+  website: string | null
+  contact_source: string
+  contact_source_other: string | null
+  consent_description: string
+  privacy_policy_url: string | null
+  opt_in_form_url: string | null
+  ip_address: string | null
+  user_agent: string | null
+  terms_version: string | null
 }
 
 export default function Settings() {
@@ -113,6 +130,9 @@ export default function Settings() {
   const [savingTech, setSavingTech] = useState(false)
   const [techError, setTechError] = useState<string | null>(null)
 
+  const [complianceLatest, setComplianceLatest] = useState<ComplianceAgreementRow | null>(null)
+  const [complianceDetailOpen, setComplianceDetailOpen] = useState(false)
+
   // Mi Agente Inbound
   type AgenteTipo = 'door_hanger_agua' | 'solo_agendar_medico_legal' | 'solo_agendar_general'
   const [agenteTipo, setAgenteTipo] = useState<AgenteTipo>('door_hanger_agua')
@@ -155,6 +175,7 @@ export default function Settings() {
           integRes,
           techsRes,
           inboundRes,
+          complianceRes,
         ] = await Promise.all([
           supabase
             .from('users')
@@ -190,6 +211,15 @@ export default function Settings() {
             .select('agente_tipo, phone_number, nombre_analista, tiene_equipo, activo')
             .eq('user_id', userId)
             .maybeSingle(),
+          supabase
+            .from('compliance_agreements')
+            .select(
+              'id, created_at, company_name, business_type, country, website, contact_source, contact_source_other, consent_description, privacy_policy_url, opt_in_form_url, ip_address, user_agent, terms_version',
+            )
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
         ])
 
         if (!mounted) return
@@ -204,6 +234,11 @@ export default function Settings() {
         const integ = integRes.data
         const techs = techsRes.data
         const inboundAgent = inboundRes.data
+        if (!complianceRes.error && complianceRes.data) {
+          setComplianceLatest(complianceRes.data as ComplianceAgreementRow)
+        } else {
+          setComplianceLatest(null)
+        }
 
         setProfile({
           company_name: userRow?.company_name ?? '',
@@ -706,6 +741,167 @@ export default function Settings() {
           </button>
         </div>
       </div>
+
+      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
+        <h2 className="text-base font-semibold theme-text-primary">
+          Declaración de cumplimiento
+        </h2>
+        <p className="mt-1 text-xs theme-text-muted">
+          Requerida para crear campañas e importar contactos. Incluye IP y marca de tiempo al firmar.
+        </p>
+        <div className="mt-4 space-y-3">
+          {complianceLatest ? (
+            <>
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#22c55e]/40 bg-[#22c55e]/10 px-3 py-1 text-xs font-medium text-[#22c55e]">
+                Firmado el{' '}
+                {new Date(complianceLatest.created_at).toLocaleDateString('es-ES', {
+                  day: 'numeric',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </div>
+              <p className="text-sm theme-text-secondary">
+                <span className="theme-text-muted">Empresa:</span>{' '}
+                {complianceLatest.company_name}
+              </p>
+              <p className="text-sm theme-text-secondary">
+                <span className="theme-text-muted">País:</span> {complianceLatest.country}
+              </p>
+              <p className="text-xs theme-text-dim">
+                Referencia: {complianceLatest.id} · Versión:{' '}
+                {complianceLatest.terms_version ?? 'v1.0'}
+              </p>
+            </>
+          ) : (
+            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-400">
+              Pendiente — Firmar compliance
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setComplianceDetailOpen(true)}
+              disabled={!complianceLatest}
+              className="rounded-lg border theme-border px-3 py-2 text-sm font-medium theme-text-secondary hover:bg-zinc-900/50 disabled:opacity-40"
+            >
+              Ver declaración
+            </button>
+            <Link
+              to="/compliance"
+              className="inline-flex items-center rounded-lg bg-[#22c55e] px-3 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455]"
+            >
+              {complianceLatest ? 'Actualizar' : 'Ir a firmar'}
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {complianceDetailOpen && complianceLatest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border theme-border theme-bg-card p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="compliance-detail-title"
+          >
+            <h3
+              id="compliance-detail-title"
+              className="text-lg font-semibold theme-text-primary"
+            >
+              Declaración firmada
+            </h3>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div>
+                <dt className="text-xs text-zinc-400">Referencia</dt>
+                <dd className="theme-text-secondary font-mono text-xs break-all">
+                  {complianceLatest.id}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">Fecha</dt>
+                <dd className="theme-text-secondary">
+                  {new Date(complianceLatest.created_at).toLocaleString('es-ES')}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">Empresa</dt>
+                <dd className="theme-text-secondary">{complianceLatest.company_name}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">Tipo de negocio</dt>
+                <dd className="theme-text-secondary">{complianceLatest.business_type}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">País</dt>
+                <dd className="theme-text-secondary">{complianceLatest.country}</dd>
+              </div>
+              {complianceLatest.website && (
+                <div>
+                  <dt className="text-xs text-zinc-400">Sitio web</dt>
+                  <dd className="theme-text-secondary break-all">{complianceLatest.website}</dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-xs text-zinc-400">Origen de contactos</dt>
+                <dd className="theme-text-secondary">{complianceLatest.contact_source}</dd>
+              </div>
+              {complianceLatest.contact_source_other && (
+                <div>
+                  <dt className="text-xs text-zinc-400">Otro (especificado)</dt>
+                  <dd className="theme-text-secondary">{complianceLatest.contact_source_other}</dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-xs text-zinc-400">Consentimiento (descripción)</dt>
+                <dd className="theme-text-secondary whitespace-pre-wrap">
+                  {complianceLatest.consent_description}
+                </dd>
+              </div>
+              {complianceLatest.privacy_policy_url && (
+                <div>
+                  <dt className="text-xs text-zinc-400">URL política de privacidad</dt>
+                  <dd className="theme-text-secondary break-all">
+                    {complianceLatest.privacy_policy_url}
+                  </dd>
+                </div>
+              )}
+              {complianceLatest.opt_in_form_url && (
+                <div>
+                  <dt className="text-xs text-zinc-400">URL formulario opt-in</dt>
+                  <dd className="theme-text-secondary break-all">
+                    {complianceLatest.opt_in_form_url}
+                  </dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-xs text-zinc-400">IP</dt>
+                <dd className="theme-text-secondary font-mono text-xs">
+                  {complianceLatest.ip_address ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">User-Agent</dt>
+                <dd className="theme-text-secondary text-xs break-all">
+                  {complianceLatest.user_agent ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">Versión de términos</dt>
+                <dd className="theme-text-secondary">
+                  {complianceLatest.terms_version ?? 'v1.0'}
+                </dd>
+              </div>
+            </dl>
+            <button
+              type="button"
+              onClick={() => setComplianceDetailOpen(false)}
+              className="mt-6 w-full rounded-lg bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Perfil para facturación (Stripe) */}
       <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   X,
   ChevronDown,
@@ -106,6 +106,28 @@ function supportTicketStatusClass(status: string | null | undefined): string {
   if (s === 'resuelto') return 'bg-emerald-500/20 text-emerald-300 ring-1 ring-emerald-500/30'
   if (s === 'en_revision') return 'bg-sky-500/20 text-sky-300 ring-1 ring-sky-500/30'
   return 'bg-amber-500/20 text-amber-200 ring-1 ring-amber-500/35'
+}
+
+type ComplianceAgreementAdminRow = {
+  id: string
+  user_id: string
+  created_at: string
+  company_name: string
+  business_type: string
+  country: string
+  website: string | null
+  contact_source: string
+  contact_source_other: string | null
+  consent_description: string
+  privacy_policy_url: string | null
+  opt_in_form_url: string | null
+  decl_consent_contacts: boolean
+  decl_laws: boolean
+  decl_opt_out: boolean
+  decl_responsibility: boolean
+  ip_address: string | null
+  user_agent: string | null
+  terms_version: string | null
 }
 
 type ActivityLogRow = {
@@ -349,6 +371,50 @@ const DEFAULT_COST_PER_MIN_BASICO = 0.45
 const DEFAULT_COST_PER_MIN_PRO = 0.75
 const DEFAULT_COST_PER_MIN_PREMIUM = 0.9
 
+const DEFAULT_RECARGA_MIN_PROSPECTADOR = 20
+const DEFAULT_RECARGA_MIN_VENDEDOR = 50
+const DEFAULT_RECARGA_MIN_CAZADOR = 100
+
+function AdminCollapsibleSection({
+  title,
+  emoji,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string
+  emoji?: string
+  open: boolean
+  onToggle: () => void
+  children: ReactNode
+}) {
+  return (
+    <div className="rounded-2xl border theme-border/80 theme-bg-card overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-[#0b0b0b]/80 bg-[#0b0b0b]/40"
+      >
+        <h2 className="text-base font-semibold theme-text-primary">
+          {emoji ? `${emoji} ` : ''}
+          {title}
+        </h2>
+        <span className="shrink-0 rounded-lg border border-[#22c55e]/35 bg-[#22c55e]/10 px-2.5 py-1 text-xs font-medium text-[#22c55e]">
+          {open ? '▼ Colapsar' : '▶ Expandir'}
+        </span>
+      </button>
+      <div
+        className="grid transition-[grid-template-rows] duration-300 ease-out"
+        style={{ gridTemplateRows: open ? '1fr' : '0fr' }}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="border-t theme-border/80 px-5 pb-5 pt-4">{children}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Admin() {
   const [metrics, setMetrics] = useState({
     totalUsers: 0,
@@ -429,6 +495,33 @@ export default function Admin() {
   const [savingCreditsAdjust, setSavingCreditsAdjust] = useState(false)
   const [creditsAdjustToast, setCreditsAdjustToast] = useState<string | null>(null)
 
+  const [secMetricasAbierto, setSecMetricasAbierto] = useState(false)
+  const [secTicketsAbierto, setSecTicketsAbierto] = useState(true)
+  const [secLogsAbierto, setSecLogsAbierto] = useState(false)
+  const [secRetellAbierto, setSecRetellAbierto] = useState(false)
+  const [secTwilioAbierto, setSecTwilioAbierto] = useState(false)
+  const [secPreciosMinAbierto, setSecPreciosMinAbierto] = useState(false)
+  const [secRecargaMinAbierto, setSecRecargaMinAbierto] = useState(false)
+  const [secPlanesAbierto, setSecPlanesAbierto] = useState(false)
+  const [secNichosAbierto, setSecNichosAbierto] = useState(false)
+  const [secCrmAbierto, setSecCrmAbierto] = useState(false)
+  const [secNumerosA2PAbierto, setSecNumerosA2PAbierto] = useState(false)
+  const [secUsuariosCreditosAbierto, setSecUsuariosCreditosAbierto] = useState(true)
+  const [secUsuariosListaAbierto, setSecUsuariosListaAbierto] = useState(true)
+  const [secComplianceAbierto, setSecComplianceAbierto] = useState(true)
+  const [secActividadGlobalAbierto, setSecActividadGlobalAbierto] = useState(false)
+
+  const [complianceAgreementsAll, setComplianceAgreementsAll] = useState<ComplianceAgreementAdminRow[]>([])
+  const [complianceUserFilter, setComplianceUserFilter] = useState<'all' | 'signed' | 'pending'>('all')
+  const [complianceDetailModal, setComplianceDetailModal] = useState<ComplianceAgreementAdminRow | null>(null)
+
+  const [recargaMinProspectador, setRecargaMinProspectador] = useState(DEFAULT_RECARGA_MIN_PROSPECTADOR)
+  const [recargaMinVendedor, setRecargaMinVendedor] = useState(DEFAULT_RECARGA_MIN_VENDEDOR)
+  const [recargaMinCazador, setRecargaMinCazador] = useState(DEFAULT_RECARGA_MIN_CAZADOR)
+  const [recargaMinSaving, setRecargaMinSaving] = useState(false)
+  const [recargaMinError, setRecargaMinError] = useState<string | null>(null)
+  const [recargaMinToast, setRecargaMinToast] = useState<string | null>(null)
+
   useEffect(() => {
     let mounted = true
     async function load() {
@@ -446,14 +539,14 @@ export default function Admin() {
         console.log('users error:', error)
         if (!parseEsAdmin(data?.es_admin)) { setError('Acceso denegado'); return }
 
-        const [usersRes, callsRes, callsTodayRes, config, phones, usersData, usersCreditsRes, logs, nichosData, plansData, catalogData, ticketsRes, activityLogsRes] = await Promise.all([
+        const [usersRes, callsRes, callsTodayRes, config, phones, usersData, usersCreditsRes, logs, nichosData, plansData, catalogData, ticketsRes, activityLogsRes, complianceAllRes] = await Promise.all([
           supabase.from('users').select('*', { count: 'exact', head: true }),
           supabase.from('call_logs').select('*', { count: 'exact', head: true }),
           supabase.from('call_logs').select('duracion_minutos').gte('created_at', new Date().toISOString().slice(0, 10)),
           supabase
             .from('admin_config')
             .select(
-              'id, retell_api_key, updated_at, twilio_account_sid, twilio_auth_token, twilio_phone_number, price_per_min_basico, price_per_min_pro, price_per_min_premium',
+              'id, retell_api_key, updated_at, twilio_account_sid, twilio_auth_token, twilio_phone_number, price_per_min_basico, price_per_min_pro, price_per_min_premium, recarga_minima_prospectador, recarga_minima_vendedor, recarga_minima_cazador',
             )
             .limit(1)
             .maybeSingle(),
@@ -511,6 +604,32 @@ export default function Admin() {
             )
             .order('created_at', { ascending: false })
             .limit(200),
+          supabase
+            .from('compliance_agreements')
+            .select(
+              `
+              id,
+              user_id,
+              created_at,
+              company_name,
+              business_type,
+              country,
+              website,
+              contact_source,
+              contact_source_other,
+              consent_description,
+              privacy_policy_url,
+              opt_in_form_url,
+              decl_consent_contacts,
+              decl_laws,
+              decl_opt_out,
+              decl_responsibility,
+              ip_address,
+              user_agent,
+              terms_version
+            `,
+            )
+            .order('created_at', { ascending: false }),
         ])
 
         if (!mounted) return
@@ -539,6 +658,9 @@ export default function Admin() {
           price_per_min_basico?: number | null
           price_per_min_pro?: number | null
           price_per_min_premium?: number | null
+          recarga_minima_prospectador?: number | string | null
+          recarga_minima_vendedor?: number | string | null
+          recarga_minima_cazador?: number | string | null
         } | null
 
         const cfgBasico = configRow?.price_per_min_basico ?? DEFAULT_COST_PER_MIN_BASICO
@@ -548,6 +670,19 @@ export default function Admin() {
         setPriceBasico(cfgBasico)
         setPricePro(cfgPro)
         setPricePremium(cfgPremium)
+
+        const rp = configRow?.recarga_minima_prospectador
+        const rv = configRow?.recarga_minima_vendedor
+        const rc = configRow?.recarga_minima_cazador
+        if (rp != null && Number.isFinite(Number(rp))) {
+          setRecargaMinProspectador(Number(rp))
+        }
+        if (rv != null && Number.isFinite(Number(rv))) {
+          setRecargaMinVendedor(Number(rv))
+        }
+        if (rc != null && Number.isFinite(Number(rc))) {
+          setRecargaMinCazador(Number(rc))
+        }
 
         setMetrics({
           totalUsers,
@@ -646,6 +781,15 @@ export default function Admin() {
         } else {
           setActivityLogs((activityLogsRes.data ?? []) as ActivityLogRow[])
         }
+
+        if (complianceAllRes.error) {
+          if (import.meta.env.DEV) {
+            console.warn('[Admin] compliance_agreements:', complianceAllRes.error.message)
+          }
+          setComplianceAgreementsAll([])
+        } else {
+          setComplianceAgreementsAll((complianceAllRes.data ?? []) as ComplianceAgreementAdminRow[])
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Error al cargar')
       } finally {
@@ -730,6 +874,41 @@ export default function Admin() {
     } catch (e) {
       // por ahora silencioso; se podría mostrar toast
       console.error(e)
+    }
+  }
+
+  async function saveRecargaMinimas() {
+    const p = Number(recargaMinProspectador)
+    const v = Number(recargaMinVendedor)
+    const c = Number(recargaMinCazador)
+    if (![p, v, c].every((n) => Number.isFinite(n) && n > 5)) {
+      setRecargaMinError('Cada monto mínimo debe ser mayor a $5.')
+      return
+    }
+    setRecargaMinError(null)
+    setRecargaMinToast(null)
+    setRecargaMinSaving(true)
+    try {
+      const { data: existing } = await supabase.from('admin_config').select('id').limit(1).maybeSingle()
+      const payload = {
+        recarga_minima_prospectador: p,
+        recarga_minima_vendedor: v,
+        recarga_minima_cazador: c,
+        updated_at: new Date().toISOString(),
+      }
+      if (existing?.id != null) {
+        const { error } = await supabase.from('admin_config').update(payload).eq('id', existing.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('admin_config').insert(payload)
+        if (error) throw error
+      }
+      setRecargaMinToast('Cambios guardados.')
+      window.setTimeout(() => setRecargaMinToast(null), 3500)
+    } catch (e) {
+      setRecargaMinError(e instanceof Error ? e.message : 'No se pudo guardar.')
+    } finally {
+      setRecargaMinSaving(false)
     }
   }
 
@@ -1072,6 +1251,24 @@ export default function Admin() {
     return { err, logins, recargas, activeUsers }
   }, [activityLogs])
 
+  const latestComplianceByUser = useMemo(() => {
+    const m = new Map<string, ComplianceAgreementAdminRow>()
+    for (const row of complianceAgreementsAll) {
+      if (!m.has(row.user_id)) m.set(row.user_id, row)
+    }
+    return m
+  }, [complianceAgreementsAll])
+
+  const complianceUserRowsFiltered = useMemo(() => {
+    const rows = users.map((u) => ({
+      user: u,
+      agreement: latestComplianceByUser.get(u.id) ?? null,
+    }))
+    if (complianceUserFilter === 'signed') return rows.filter((r) => r.agreement != null)
+    if (complianceUserFilter === 'pending') return rows.filter((r) => r.agreement == null)
+    return rows
+  }, [users, latestComplianceByUser, complianceUserFilter])
+
   if (loading) return <div className="flex items-center justify-center py-12"><span className="text-sm theme-text-muted">Cargando panel admin...</span></div>
   if (error) return <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">{error}. Solo usuarios administradores pueden acceder.</div>
 
@@ -1110,28 +1307,39 @@ export default function Admin() {
       </div>
 
       {/* Métricas */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Usuarios registrados', value: metrics.totalUsers },
-          { label: 'Total llamadas', value: metrics.totalCalls },
-          { label: 'Minutos consumidos hoy', value: metrics.minutesToday },
-          { label: 'Ingresos estimados', value: `$${metrics.revenueEst.toFixed(2)}` },
-        ].map((m) => (
-          <div key={m.label} className="rounded-2xl border theme-border/80 theme-bg-card p-4">
-            <div className="text-xs theme-text-muted">{m.label}</div>
-            <div className="text-2xl font-semibold theme-text-primary">{m.value}</div>
-          </div>
-        ))}
-      </div>
+      <AdminCollapsibleSection
+        title="Resumen / métricas"
+        emoji="📊"
+        open={secMetricasAbierto}
+        onToggle={() => setSecMetricasAbierto((x) => !x)}
+      >
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: 'Usuarios registrados', value: metrics.totalUsers },
+            { label: 'Total llamadas', value: metrics.totalCalls },
+            { label: 'Minutos consumidos hoy', value: metrics.minutesToday },
+            { label: 'Ingresos estimados', value: `$${metrics.revenueEst.toFixed(2)}` },
+          ].map((m) => (
+            <div key={m.label} className="rounded-2xl border theme-border/80 theme-bg-card p-4">
+              <div className="text-xs theme-text-muted">{m.label}</div>
+              <div className="text-2xl font-semibold theme-text-primary">{m.value}</div>
+            </div>
+          ))}
+        </div>
+      </AdminCollapsibleSection>
 
       {/* Tickets de soporte */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">Tickets de soporte</h2>
-        <p className="mt-1 text-sm theme-text-muted">
+      <AdminCollapsibleSection
+        title="Tickets de soporte"
+        emoji="🎫"
+        open={secTicketsAbierto}
+        onToggle={() => setSecTicketsAbierto((x) => !x)}
+      >
+        <p className="mb-4 text-sm theme-text-muted">
           Enviados desde el asistente Krone AI (HelpChat). Ejecuta{' '}
           <code className="rounded bg-zinc-900 px-1 text-xs">supabase-migrations-support-tickets.sql</code> si la tabla no existe.
         </p>
-        <div className="mt-4 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-xs theme-text-dim">
@@ -1195,20 +1403,24 @@ export default function Admin() {
             </tbody>
           </table>
         </div>
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Logs de actividad */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">Logs de actividad</h2>
-        <p className="mt-1 text-sm theme-text-muted">
+      <AdminCollapsibleSection
+        title="Logs de actividad"
+        emoji="📋"
+        open={secLogsAbierto}
+        onToggle={() => setSecLogsAbierto((x) => !x)}
+      >
+        <p className="mb-3 text-sm theme-text-muted">
           Eventos registrados desde la app (auth, campañas, contactos, pagos, chatbot, errores). En producción conviene
           retener como máximo ~90 días (limpieza periódica en base de datos).
         </p>
-        <p className="mt-1 text-xs text-zinc-600">
+        <p className="mb-4 text-xs text-zinc-600">
           Ejecuta <code className="rounded bg-zinc-900 px-1">supabase-migrations-activity-logs.sql</code> si la tabla no existe.
         </p>
 
-        <div className="mt-4 flex flex-wrap gap-3">
+        <div className="mb-4 flex flex-wrap gap-3">
           <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs">
             <span className="text-zinc-500">Errores hoy:</span>{' '}
             <span className="font-semibold text-red-300">{activityStats.err}</span>
@@ -1227,7 +1439,7 @@ export default function Admin() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-end gap-3">
+        <div className="mb-4 flex flex-wrap items-end gap-3">
           <div>
             <label className="text-xs theme-text-dim">Rango</label>
             <select
@@ -1282,7 +1494,7 @@ export default function Admin() {
           </label>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-xs theme-text-dim">
@@ -1347,24 +1559,32 @@ export default function Admin() {
             </tbody>
           </table>
         </div>
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Retell API */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">Configuración de Retell API</h2>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+      <AdminCollapsibleSection
+        title="Configuración de Retell API"
+        emoji="🔑"
+        open={secRetellAbierto}
+        onToggle={() => setSecRetellAbierto((x) => !x)}
+      >
+        <div className="flex flex-wrap items-center gap-3">
           <input type="password" value={retellKey} onChange={(e) => setRetellKey(e.target.value)} placeholder="API Key de Retell" className="rounded-lg theme-bg-base px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e] w-64" />
           <button type="button" onClick={saveAndVerifyRetell} disabled={savingRetell} className="rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] disabled:opacity-60">Guardar y verificar</button>
           {retellStatus === 'connected' && <span className="rounded-full bg-[#22c55e]/20 px-2 py-1 text-xs font-semibold text-[#22c55e]">Conectado ✓</span>}
           {retellStatus === 'error' && <span className="rounded-full bg-red-500/20 px-2 py-1 text-xs font-semibold text-red-300">Key inválida</span>}
         </div>
         {retellError && <p className="mt-2 text-sm text-red-300">{retellError}</p>}
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Configuración de Twilio */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">Configuración de Twilio</h2>
-        <div className="mt-4 space-y-4">
+      <AdminCollapsibleSection
+        title="Configuración de Twilio"
+        emoji="📱"
+        open={secTwilioAbierto}
+        onToggle={() => setSecTwilioAbierto((x) => !x)}
+      >
+        <div className="space-y-4">
           <div>
             <label className="text-sm theme-text-muted">Twilio Account SID</label>
             <input
@@ -1406,15 +1626,19 @@ export default function Admin() {
           </div>
           {twilioError && <p className="text-sm text-red-300">{twilioError}</p>}
         </div>
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Configuración de precios */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">Configuración de precios por minuto</h2>
-        <p className="mt-1 text-sm theme-text-muted">
+      <AdminCollapsibleSection
+        title="Configuración de precios por minuto"
+        emoji="💵"
+        open={secPreciosMinAbierto}
+        onToggle={() => setSecPreciosMinAbierto((x) => !x)}
+      >
+        <p className="mb-4 text-sm theme-text-muted">
           Estos valores se usan para calcular los cargos de recarga y las métricas de ingresos estimados.
         </p>
-        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
             <label className="text-xs theme-text-muted">Básico ($/min)</label>
             <input
@@ -1458,16 +1682,86 @@ export default function Admin() {
             Guardar precios
           </button>
         </div>
-      </div>
+      </AdminCollapsibleSection>
+
+      {/* Configuración de recargas mínimas (Credits) */}
+      <AdminCollapsibleSection
+        title="Configuración de Recargas"
+        emoji="⚙️"
+        open={secRecargaMinAbierto}
+        onToggle={() => setSecRecargaMinAbierto((x) => !x)}
+      >
+        <p className="mb-4 text-sm theme-text-muted">
+          Monto mínimo de recarga por plan (solo afecta la validación y la UI en Créditos). Debe ser mayor a $5.
+        </p>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <div>
+            <div className="text-sm font-medium theme-text-primary">Plan Prospectador</div>
+            <label className="mt-2 block text-xs theme-text-dim">Recarga mínima (USD)</label>
+            <input
+              type="number"
+              min={6}
+              step="0.01"
+              value={recargaMinProspectador}
+              onChange={(e) => setRecargaMinProspectador(Number(e.target.value))}
+              className="mt-1 w-full max-w-[140px] rounded-lg theme-bg-base px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+            />
+          </div>
+          <div>
+            <div className="text-sm font-medium theme-text-primary">Plan Vendedor</div>
+            <label className="mt-2 block text-xs theme-text-dim">Recarga mínima (USD)</label>
+            <input
+              type="number"
+              min={6}
+              step="0.01"
+              value={recargaMinVendedor}
+              onChange={(e) => setRecargaMinVendedor(Number(e.target.value))}
+              className="mt-1 w-full max-w-[140px] rounded-lg theme-bg-base px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+            />
+          </div>
+          <div>
+            <div className="text-sm font-medium theme-text-primary">Plan Cazador</div>
+            <label className="mt-2 block text-xs theme-text-dim">Recarga mínima (USD)</label>
+            <input
+              type="number"
+              min={6}
+              step="0.01"
+              value={recargaMinCazador}
+              onChange={(e) => setRecargaMinCazador(Number(e.target.value))}
+              className="mt-1 w-full max-w-[140px] rounded-lg theme-bg-base px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+            />
+          </div>
+        </div>
+        {recargaMinError && (
+          <p className="mt-3 text-sm text-red-300">{recargaMinError}</p>
+        )}
+        {recargaMinToast && (
+          <p className="mt-3 text-sm font-medium text-[#22c55e]">{recargaMinToast}</p>
+        )}
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => void saveRecargaMinimas()}
+            disabled={recargaMinSaving}
+            className="rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] disabled:opacity-60"
+          >
+            {recargaMinSaving ? 'Guardando...' : 'Guardar cambios'}
+          </button>
+        </div>
+      </AdminCollapsibleSection>
 
       {/* Planes y Precios */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">Planes y Precios</h2>
-        <p className="mt-1 text-sm theme-text-muted">
+      <AdminCollapsibleSection
+        title="Planes y Precios"
+        emoji="💼"
+        open={secPlanesAbierto}
+        onToggle={() => setSecPlanesAbierto((x) => !x)}
+      >
+        <p className="mb-4 text-sm theme-text-muted">
           Edita nombre, emoji, precio por minuto, descripción y features de cada plan. Los cambios se reflejan en Credits y Landing.
         </p>
         {planSaveToast && (
-          <div className="mt-3 rounded-lg bg-[#22c55e]/20 px-3 py-2 text-sm font-medium text-[#22c55e]">
+          <div className="mb-3 rounded-lg bg-[#22c55e]/20 px-3 py-2 text-sm font-medium text-[#22c55e]">
             {planSaveToast}
           </div>
         )}
@@ -1597,14 +1891,18 @@ export default function Admin() {
             </div>
           ))}
         </div>
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Nichos */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <AdminCollapsibleSection
+        title="Templates de Nicho"
+        emoji="📁"
+        open={secNichosAbierto}
+        onToggle={() => setSecNichosAbierto((x) => !x)}
+      >
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold theme-text-primary">Templates de Nicho</h2>
-            <p className="text-sm theme-text-muted mt-1">Variables dinámicas que el agente usa según el nicho del cliente.</p>
+            <p className="text-sm theme-text-muted">Variables dinámicas que el agente usa según el nicho del cliente.</p>
           </div>
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setPrefabNichoMessageOpen(true)} className="rounded-lg px-3 py-2 text-sm font-medium theme-text-muted ring-1 ring-zinc-700/80 hover:bg-zinc-800/60">
@@ -1617,7 +1915,7 @@ export default function Admin() {
         </div>
 
         {prefabNichoMessageOpen && (
-          <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
             Ejecuta el SQL de nichos en Supabase para cargar los templates prefabricados.
             <button type="button" onClick={() => setPrefabNichoMessageOpen(false)} className="ml-2 text-amber-300 underline hover:no-underline">Cerrar</button>
           </div>
@@ -1721,13 +2019,17 @@ export default function Admin() {
             })
           )}
         </div>
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Integraciones CRM (catálogo) */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">Integraciones CRM</h2>
-        <p className="mt-1 text-sm theme-text-muted">Decide qué integraciones mostrar en la página /integrations. Edita nombre, logo y badge.</p>
-        <div className="mt-4 overflow-x-auto">
+      <AdminCollapsibleSection
+        title="Integraciones CRM"
+        emoji="🔌"
+        open={secCrmAbierto}
+        onToggle={() => setSecCrmAbierto((x) => !x)}
+      >
+        <p className="mb-4 text-sm theme-text-muted">Decide qué integraciones mostrar en la página /integrations. Edita nombre, logo y badge.</p>
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs theme-text-muted border-b theme-border/80">
               <tr>
@@ -1790,15 +2092,19 @@ export default function Admin() {
             </tbody>
           </table>
         </div>
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Números A2P */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-semibold theme-text-primary">Números de Teléfono A2P</h2>
+      <AdminCollapsibleSection
+        title="Números de Teléfono A2P"
+        emoji="☎️"
+        open={secNumerosA2PAbierto}
+        onToggle={() => setSecNumerosA2PAbierto((x) => !x)}
+      >
+        <div className="mb-4 flex items-center justify-end">
           <button type="button" onClick={() => setPhoneModalOpen(true)} className="rounded-lg bg-[#22c55e] px-3 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455]">Agregar número</button>
         </div>
-        <div className="mt-4 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs theme-text-muted border-b theme-border/80">
               <tr>
@@ -1826,14 +2132,18 @@ export default function Admin() {
             </tbody>
           </table>
         </div>
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Créditos — usuarios */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <AdminCollapsibleSection
+        title="Usuarios y créditos"
+        emoji="👥"
+        open={secUsuariosCreditosAbierto}
+        onToggle={() => setSecUsuariosCreditosAbierto((x) => !x)}
+      >
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold theme-text-primary">Usuarios y créditos</h2>
-            <p className="mt-1 text-sm theme-text-muted">
+            <p className="text-sm theme-text-muted">
               Plan, minutos y SMS. Búsqueda por nombre o email.
             </p>
           </div>
@@ -1847,7 +2157,7 @@ export default function Admin() {
         </div>
         {creditsAdjustToast && (
           <div
-            className={`mt-3 rounded-lg px-3 py-2 text-sm font-medium ${
+            className={`mb-3 rounded-lg px-3 py-2 text-sm font-medium ${
               creditsAdjustToast === 'Créditos actualizados correctamente'
                 ? 'bg-[#22c55e]/20 text-[#22c55e]'
                 : 'bg-red-500/15 text-red-300'
@@ -1856,7 +2166,7 @@ export default function Admin() {
             {creditsAdjustToast}
           </div>
         )}
-        <div className="mt-4 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b theme-border/80 text-xs theme-text-muted">
               <tr>
@@ -1911,12 +2221,114 @@ export default function Admin() {
             </tbody>
           </table>
         </div>
-      </div>
+      </AdminCollapsibleSection>
+
+      <AdminCollapsibleSection
+        title="Compliance de usuarios"
+        emoji="📋"
+        open={secComplianceAbierto}
+        onToggle={() => setSecComplianceAbierto((x) => !x)}
+      >
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-sm theme-text-muted">Filtrar:</span>
+          {(
+            [
+              { id: 'all' as const, label: 'Todos' },
+              { id: 'signed' as const, label: 'Firmados' },
+              { id: 'pending' as const, label: 'Pendientes' },
+            ]
+          ).map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => setComplianceUserFilter(opt.id)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                complianceUserFilter === opt.id
+                  ? 'bg-[#22c55e]/25 text-[#22c55e] ring-1 ring-[#22c55e]/40'
+                  : 'bg-zinc-800/60 theme-text-muted hover:bg-zinc-800'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b theme-border/80 text-xs theme-text-muted">
+              <tr>
+                <th className="px-3 py-2">Usuario</th>
+                <th className="px-3 py-2">Empresa</th>
+                <th className="px-3 py-2">País</th>
+                <th className="px-3 py-2">Fuente</th>
+                <th className="px-3 py-2">Firmado</th>
+                <th className="px-3 py-2">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {complianceUserRowsFiltered.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-6 text-center theme-text-dim">
+                    Ningún usuario en este filtro.
+                  </td>
+                </tr>
+              ) : (
+                complianceUserRowsFiltered.map(({ user: u, agreement: a }) => (
+                  <tr key={u.id} className="border-b theme-border/80">
+                    <td className="px-3 py-2 theme-text-secondary">{u.email ?? u.id}</td>
+                    <td className="px-3 py-2 theme-text-muted">
+                      {a?.company_name ?? u.company_name ?? '—'}
+                    </td>
+                    <td className="px-3 py-2 theme-text-muted">{a?.country ?? '—'}</td>
+                    <td className="px-3 py-2 theme-text-muted max-w-[200px] truncate" title={a?.contact_source ?? ''}>
+                      {a?.contact_source ?? '—'}
+                    </td>
+                    <td className="px-3 py-2">
+                      {a ? (
+                        <span className="inline-flex rounded-full border border-[#22c55e]/40 bg-[#22c55e]/15 px-2.5 py-0.5 text-xs font-semibold text-[#22c55e]">
+                          Firmado
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-300">
+                          Pendiente
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          disabled={!a}
+                          onClick={() => a && setComplianceDetailModal(a)}
+                          className="rounded bg-[#22c55e]/20 px-2 py-1 text-xs font-semibold text-[#22c55e] hover:bg-[#22c55e]/30 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          Ver declaración
+                        </button>
+                        <button
+                          type="button"
+                          disabled
+                          title="Próximamente"
+                          className="cursor-not-allowed rounded bg-zinc-700/50 px-2 py-1 text-xs font-semibold theme-text-dim opacity-60"
+                        >
+                          Exportar PDF
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </AdminCollapsibleSection>
 
       {/* Usuarios */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">Usuarios</h2>
-        <div className="mt-4 overflow-x-auto">
+      <AdminCollapsibleSection
+        title="Usuarios"
+        emoji="🧑‍💼"
+        open={secUsuariosListaAbierto}
+        onToggle={() => setSecUsuariosListaAbierto((x) => !x)}
+      >
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs theme-text-muted border-b theme-border/80">
               <tr>
@@ -1946,12 +2358,16 @@ export default function Admin() {
             </tbody>
           </table>
         </div>
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Actividad global */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">Actividad Global</h2>
-        <div className="mt-4 overflow-x-auto">
+      <AdminCollapsibleSection
+        title="Actividad Global"
+        emoji="🌐"
+        open={secActividadGlobalAbierto}
+        onToggle={() => setSecActividadGlobalAbierto((x) => !x)}
+      >
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="text-xs theme-text-muted border-b theme-border/80">
               <tr>
@@ -1985,7 +2401,7 @@ export default function Admin() {
             </tbody>
           </table>
         </div>
-      </div>
+      </AdminCollapsibleSection>
 
       {/* Modal Nicho */}
       {nichoModalOpen && (
@@ -2329,6 +2745,139 @@ export default function Admin() {
                 )}
               </pre>
             </div>
+          </div>
+        </div>
+      )}
+
+      {complianceDetailModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border theme-border theme-bg-card p-5 shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-compliance-detail-title"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <h3
+                id="admin-compliance-detail-title"
+                className="text-lg font-semibold theme-text-primary"
+              >
+                Declaración de cumplimiento
+              </h3>
+              <button
+                type="button"
+                onClick={() => setComplianceDetailModal(null)}
+                className="rounded p-1 text-zinc-400 hover:bg-zinc-800"
+                aria-label="Cerrar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              Usuario:{' '}
+              {users.find((x) => x.id === complianceDetailModal.user_id)?.email ??
+                complianceDetailModal.user_id}
+            </p>
+            <dl className="mt-4 space-y-3 text-sm">
+              <div>
+                <dt className="text-xs text-zinc-400">Referencia</dt>
+                <dd className="break-all font-mono text-xs theme-text-secondary">
+                  {complianceDetailModal.id}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">Fecha</dt>
+                <dd className="theme-text-secondary">
+                  {new Date(complianceDetailModal.created_at).toLocaleString('es-ES')}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">Empresa</dt>
+                <dd className="theme-text-secondary">{complianceDetailModal.company_name}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">Tipo de negocio</dt>
+                <dd className="theme-text-secondary">{complianceDetailModal.business_type}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">País</dt>
+                <dd className="theme-text-secondary">{complianceDetailModal.country}</dd>
+              </div>
+              {complianceDetailModal.website && (
+                <div>
+                  <dt className="text-xs text-zinc-400">Sitio web</dt>
+                  <dd className="break-all theme-text-secondary">{complianceDetailModal.website}</dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-xs text-zinc-400">Origen de contactos</dt>
+                <dd className="theme-text-secondary">{complianceDetailModal.contact_source}</dd>
+              </div>
+              {complianceDetailModal.contact_source_other && (
+                <div>
+                  <dt className="text-xs text-zinc-400">Otro</dt>
+                  <dd className="theme-text-secondary">
+                    {complianceDetailModal.contact_source_other}
+                  </dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-xs text-zinc-400">Descripción del consentimiento</dt>
+                <dd className="whitespace-pre-wrap theme-text-secondary">
+                  {complianceDetailModal.consent_description}
+                </dd>
+              </div>
+              {complianceDetailModal.privacy_policy_url && (
+                <div>
+                  <dt className="text-xs text-zinc-400">URL política de privacidad</dt>
+                  <dd className="break-all theme-text-secondary">
+                    {complianceDetailModal.privacy_policy_url}
+                  </dd>
+                </div>
+              )}
+              {complianceDetailModal.opt_in_form_url && (
+                <div>
+                  <dt className="text-xs text-zinc-400">URL opt-in</dt>
+                  <dd className="break-all theme-text-secondary">
+                    {complianceDetailModal.opt_in_form_url}
+                  </dd>
+                </div>
+              )}
+              <div>
+                <dt className="text-xs text-zinc-400">Declaraciones</dt>
+                <dd className="space-y-1 text-xs theme-text-secondary">
+                  <div>Consentimiento contactos: {complianceDetailModal.decl_consent_contacts ? 'Sí' : 'No'}</div>
+                  <div>Leyes aplicables: {complianceDetailModal.decl_laws ? 'Sí' : 'No'}</div>
+                  <div>Opt-out: {complianceDetailModal.decl_opt_out ? 'Sí' : 'No'}</div>
+                  <div>Responsabilidad usuario: {complianceDetailModal.decl_responsibility ? 'Sí' : 'No'}</div>
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">IP</dt>
+                <dd className="font-mono text-xs theme-text-secondary">
+                  {complianceDetailModal.ip_address ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">User-Agent</dt>
+                <dd className="break-all text-xs theme-text-secondary">
+                  {complianceDetailModal.user_agent ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-400">Versión términos</dt>
+                <dd className="theme-text-secondary">
+                  {complianceDetailModal.terms_version ?? 'v1.0'}
+                </dd>
+              </div>
+            </dl>
+            <button
+              type="button"
+              onClick={() => setComplianceDetailModal(null)}
+              className="mt-6 w-full rounded-lg bg-zinc-800 px-3 py-2 text-sm font-medium text-zinc-100 hover:bg-zinc-700"
+            >
+              Cerrar
+            </button>
           </div>
         </div>
       )}

@@ -14,18 +14,34 @@ type Plan = 'BASICO' | 'PRO' | 'PREMIUM'
 
 const WEBHOOK_BASE_URL = getPublicWebhookBaseUrl()
 
-const MONTOS_POR_PLAN: Record<string, number[]> = {
+const TIERS_MONTOS_POR_PLAN: Record<string, number[]> = {
   prospectador: [20, 50, 100, 200],
   vendedor: [50, 100, 200, 500],
   cazador: [100, 200, 500, 1000],
 }
-const RECARGA_TEXTO_POR_PLAN: Record<string, string> = {
-  prospectador:
-    'Recarga mínima $20 — Úsalos en llamadas,\nSMS o cualquier servicio Krone',
-  vendedor:
-    'Recarga mínima $50 — Créditos para llamadas\noutbound, inbound y SMS',
-  cazador:
-    'Recarga mínima $100 — Créditos universales\npara todos los servicios Krone AI',
+
+const DEFAULT_RECARGA_MINIMA_POR_PLAN: Record<string, number> = {
+  prospectador: 20,
+  vendedor: 50,
+  cazador: 100,
+}
+
+function parseRecargaMin(v: unknown, fallback: number): number {
+  const n = typeof v === 'number' ? v : Number(v)
+  if (!Number.isFinite(n) || n <= 5) return fallback
+  return n
+}
+
+function buildRecargaTextoPlan(planId: string, minUsd: number): string {
+  const safe = Number.isFinite(minUsd) && minUsd > 5 ? minUsd : DEFAULT_RECARGA_MINIMA_POR_PLAN[planId] ?? 20
+  const label = safe % 1 === 0 ? String(Math.round(safe)) : safe.toFixed(2)
+  if (planId === 'vendedor') {
+    return `Recarga mínima $${label} — Créditos para llamadas\noutbound, inbound y SMS`
+  }
+  if (planId === 'cazador') {
+    return `Recarga mínima $${label} — Créditos universales\npara todos los servicios Krone AI`
+  }
+  return `Recarga mínima $${label} — Úsalos en llamadas,\nSMS o cualquier servicio Krone`
 }
 const PLAN_NOMBRE_PARA_ERROR: Record<string, string> = {
   prospectador: 'Prospectador',
@@ -171,6 +187,9 @@ export default function Credits() {
   const [planCosts, setPlanCosts] = useState<Record<Plan, number>>(DEFAULT_PLAN_COST_PER_MIN)
   const [planes, setPlanes] = useState<PlanConfig[]>(FALLBACK_PLANES)
   const [smsPrice, setSmsPrice] = useState<number>(0.05)
+  const [recargaMinimaPorPlan, setRecargaMinimaPorPlan] = useState<Record<string, number>>({
+    ...DEFAULT_RECARGA_MINIMA_POR_PLAN,
+  })
 
   const [searchParams, setSearchParams] = useSearchParams()
   const [successBanner, setSuccessBanner] = useState(false)
@@ -203,14 +222,16 @@ export default function Credits() {
     () => smsEstimadosDesdeSaldo(saldoUsd),
     [saldoUsd],
   )
-  const montosDisponibles = useMemo(
-    () => MONTOS_POR_PLAN[planIdForCheckout] ?? MONTOS_POR_PLAN.prospectador,
-    [planIdForCheckout],
-  )
-  const minimoDelPlan = useMemo(
-    () => (MONTOS_POR_PLAN[planIdForCheckout]?.[0] ?? 20),
-    [planIdForCheckout],
-  )
+  const minimoDelPlan = useMemo(() => {
+    const fb = DEFAULT_RECARGA_MINIMA_POR_PLAN[planIdForCheckout] ?? 20
+    return parseRecargaMin(recargaMinimaPorPlan[planIdForCheckout], fb)
+  }, [planIdForCheckout, recargaMinimaPorPlan])
+
+  const montosDisponibles = useMemo(() => {
+    const tiers = TIERS_MONTOS_POR_PLAN[planIdForCheckout] ?? TIERS_MONTOS_POR_PLAN.prospectador
+    const filtered = tiers.filter((x) => x >= minimoDelPlan)
+    return filtered.length > 0 ? filtered : [minimoDelPlan]
+  }, [planIdForCheckout, minimoDelPlan])
 
   function minutesForAmount(amountUsd: number, applyVolumeBonus: boolean): number {
     let min = amountUsd / currentPlanRate
@@ -462,20 +483,71 @@ export default function Credits() {
   useEffect(() => {
     async function loadPricing() {
       try {
-        const { data, error } = await supabase
+        let data:
+          | {
+              price_per_min_basico?: number | null
+              price_per_min_pro?: number | null
+              price_per_min_premium?: number | null
+              recarga_minima_prospectador?: number | string | null
+              recarga_minima_vendedor?: number | string | null
+              recarga_minima_cazador?: number | string | null
+            }
+          | null = null
+
+        const byId = await supabase
           .from('admin_config')
-          .select('price_per_min_basico, price_per_min_pro, price_per_min_premium')
-          .limit(1)
+          .select(
+            'price_per_min_basico, price_per_min_pro, price_per_min_premium, recarga_minima_prospectador, recarga_minima_vendedor, recarga_minima_cazador',
+          )
+          .eq('id', 1)
           .maybeSingle()
 
-        if (error || !data) return
+        if (!byId.error && byId.data) {
+          data = byId.data
+        } else {
+          const fallback = await supabase
+            .from('admin_config')
+            .select(
+              'price_per_min_basico, price_per_min_pro, price_per_min_premium, recarga_minima_prospectador, recarga_minima_vendedor, recarga_minima_cazador',
+            )
+            .limit(1)
+            .maybeSingle()
+          if (!fallback.error && fallback.data) data = fallback.data
+        }
+
+        if (!data) return
+
         setPlanCosts({
-            BASICO: typeof data.price_per_min_basico === 'number' ? data.price_per_min_basico : DEFAULT_PLAN_COST_PER_MIN.BASICO,
-            PRO: typeof data.price_per_min_pro === 'number' ? data.price_per_min_pro : DEFAULT_PLAN_COST_PER_MIN.PRO,
-            PREMIUM: typeof data.price_per_min_premium === 'number' ? data.price_per_min_premium : DEFAULT_PLAN_COST_PER_MIN.PREMIUM,
-          })
+          BASICO:
+            typeof data.price_per_min_basico === 'number'
+              ? data.price_per_min_basico
+              : DEFAULT_PLAN_COST_PER_MIN.BASICO,
+          PRO:
+            typeof data.price_per_min_pro === 'number'
+              ? data.price_per_min_pro
+              : DEFAULT_PLAN_COST_PER_MIN.PRO,
+          PREMIUM:
+            typeof data.price_per_min_premium === 'number'
+              ? data.price_per_min_premium
+              : DEFAULT_PLAN_COST_PER_MIN.PREMIUM,
+        })
+
+        setRecargaMinimaPorPlan({
+          prospectador: parseRecargaMin(
+            data.recarga_minima_prospectador,
+            DEFAULT_RECARGA_MINIMA_POR_PLAN.prospectador,
+          ),
+          vendedor: parseRecargaMin(
+            data.recarga_minima_vendedor,
+            DEFAULT_RECARGA_MINIMA_POR_PLAN.vendedor,
+          ),
+          cazador: parseRecargaMin(
+            data.recarga_minima_cazador,
+            DEFAULT_RECARGA_MINIMA_POR_PLAN.cazador,
+          ),
+        })
       } catch {
-        // usamos DEFAULT_PLAN_COST_PER_MIN si admin_config no existe o falla
+        // defaults si admin_config no existe o falla
       }
     }
 
@@ -856,7 +928,7 @@ export default function Credits() {
         </div>
 
         <p className="text-xs theme-text-muted whitespace-pre-line">
-          {RECARGA_TEXTO_POR_PLAN[planIdForCheckout] ?? RECARGA_TEXTO_POR_PLAN.prospectador}
+          {buildRecargaTextoPlan(planIdForCheckout, minimoDelPlan)}
         </p>
 
         {recargaError && (

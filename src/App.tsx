@@ -30,6 +30,9 @@ const Onboarding = lazy(() => import('./pages/Onboarding'))
 const Settings = lazy(() => import('./pages/Settings'))
 const Integrations = lazy(() => import('./pages/Integrations'))
 const Admin = lazy(() => import('./pages/Admin'))
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'))
+const Terms = lazy(() => import('./pages/Terms'))
+const Compliance = lazy(() => import('./pages/Compliance'))
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation()
@@ -129,6 +132,8 @@ function AppRoutes() {
         <Route index element={<Landing />} />
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Login />} />
+        <Route path="privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="terms" element={<Terms />} />
         <Route
           path="onboarding"
           element={
@@ -150,6 +155,7 @@ function AppRoutes() {
           <Route path="referrals" element={<Referrals />} />
           <Route path="appointments" element={<Appointments />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="compliance" element={<Compliance />} />
           <Route path="integrations" element={<Integrations />} />
           <Route
             path="admin"

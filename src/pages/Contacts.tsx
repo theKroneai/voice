@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 import { Upload, UserPlus, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../lib/activityLogger'
@@ -285,6 +285,7 @@ async function getUserIdOrThrow() {
 }
 
 export default function Contacts() {
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const initialCampaignFromQuery = searchParams.get('campaign')
 
@@ -373,6 +374,8 @@ export default function Contacts() {
   const [assignError, setAssignError] = useState<string | null>(null)
   const [assignUserPlan, setAssignUserPlan] = useState<UserPlan>('prospectador')
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false)
+  const [complianceSigned, setComplianceSigned] = useState<boolean | null>(null)
+  const [complianceGateOpen, setComplianceGateOpen] = useState(false)
   const [activeSequenceByContactId, setActiveSequenceByContactId] = useState<
     Record<string, ActiveSequenceInfo>
   >({})
@@ -478,6 +481,39 @@ export default function Contacts() {
     void loadContacts(campaignId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId])
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const uid = session?.user?.id
+        if (!uid) {
+          if (mounted) setComplianceSigned(false)
+          return
+        }
+        const { data, error } = await supabase
+          .from('compliance_agreements')
+          .select('id')
+          .eq('user_id', uid)
+          .limit(1)
+          .maybeSingle()
+        if (!mounted) return
+        if (error) {
+          setComplianceSigned(true)
+          return
+        }
+        setComplianceSigned(!!data?.id)
+      } catch {
+        if (mounted) setComplianceSigned(true)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [location.pathname])
 
   async function loadActiveSequencesForContacts() {
     try {
@@ -724,6 +760,11 @@ export default function Contacts() {
   }
 
   function openImport() {
+    if (complianceSigned === false) {
+      setComplianceGateOpen(true)
+      return
+    }
+    if (complianceSigned === null) return
     resetImport()
     setImportOpen(true)
   }
@@ -808,6 +849,11 @@ export default function Contacts() {
 
   async function onImportContacts() {
     setCsvError(null)
+    if (complianceSigned === false) {
+      setComplianceGateOpen(true)
+      setCsvError('Debes firmar tu declaración de cumplimiento antes de importar contactos.')
+      return
+    }
     if (!csvParsed) {
       setCsvError('Primero carga un archivo (CSV o Excel).')
       return
@@ -2270,6 +2316,49 @@ export default function Contacts() {
         onClose={() => setUpgradeModalOpen(false)}
         userPlan={assignUserPlan}
       />
+
+      {complianceGateOpen ? (
+        <div
+          className="fixed inset-0 z-[75] flex items-center justify-center px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="contacts-compliance-gate-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/75"
+            aria-label="Cerrar"
+            onClick={() => setComplianceGateOpen(false)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0b0b0b] p-5 shadow-2xl ring-1 ring-amber-500/20">
+            <h3
+              id="contacts-compliance-gate-title"
+              className="text-base font-semibold tracking-tight text-zinc-100"
+            >
+              Declaración de cumplimiento requerida
+            </h3>
+            <p className="mt-2 text-sm text-zinc-400">
+              Debes firmar tu declaración de cumplimiento antes de importar contactos.
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setComplianceGateOpen(false)}
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-900"
+              >
+                Cerrar
+              </button>
+              <Link
+                to="/compliance"
+                onClick={() => setComplianceGateOpen(false)}
+                className="inline-flex items-center justify-center rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455]"
+              >
+                Ir a Compliance →
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   )
 }

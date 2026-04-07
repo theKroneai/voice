@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../lib/activityLogger'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 
 type AgentTypeId =
   | 'cold_call'
@@ -426,6 +426,7 @@ function PillButton({
 }
 
 export default function Campaigns() {
+  const location = useLocation()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [modalPhase, setModalPhase] = useState<'choice' | 'templates' | 'wizard'>('choice')
@@ -484,8 +485,10 @@ export default function Campaigns() {
   const [creditsPlanVoz, setCreditsPlanVoz] = useState<string | null>(null)
   const [smsDisponibles, setSmsDisponibles] = useState(0)
   const [smsUpsellOpen, setSmsUpsellOpen] = useState(false)
+  const [complianceSigned, setComplianceSigned] = useState<boolean | null>(null)
+  const [complianceGateOpen, setComplianceGateOpen] = useState(false)
 
-  const anyModalOpen = open || editOpen || smsUpsellOpen
+  const anyModalOpen = open || editOpen || smsUpsellOpen || complianceGateOpen
   useEffect(() => {
     if (anyModalOpen) {
       document.body.style.overflow = 'hidden'
@@ -496,6 +499,39 @@ export default function Campaigns() {
       document.body.style.overflow = 'unset'
     }
   }, [anyModalOpen])
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const uid = session?.user?.id
+        if (!uid) {
+          if (mounted) setComplianceSigned(false)
+          return
+        }
+        const { data, error } = await supabase
+          .from('compliance_agreements')
+          .select('id')
+          .eq('user_id', uid)
+          .limit(1)
+          .maybeSingle()
+        if (!mounted) return
+        if (error) {
+          setComplianceSigned(true)
+          return
+        }
+        setComplianceSigned(!!data?.id)
+      } catch {
+        if (mounted) setComplianceSigned(true)
+      }
+    })()
+    return () => {
+      mounted = false
+    }
+  }, [location.pathname])
 
   const nicheSelectClassName =
     'w-full rounded-lg bg-[#0b0b0b] px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e]'
@@ -564,17 +600,32 @@ export default function Campaigns() {
   }
 
   function openModal() {
+    if (complianceSigned === false) {
+      setComplianceGateOpen(true)
+      return
+    }
+    if (complianceSigned === null) return
     resetForm()
     setOpen(true)
   }
 
   function openModalToTemplates() {
+    if (complianceSigned === false) {
+      setComplianceGateOpen(true)
+      return
+    }
+    if (complianceSigned === null) return
     resetForm()
     setModalPhase('templates')
     setOpen(true)
   }
 
   function applyTemplate(t: CampaignTemplateDef) {
+    if (complianceSigned === false) {
+      setComplianceGateOpen(true)
+      return
+    }
+    if (complianceSigned === null) return
     const cfg = t.config
     setAgentType(cfg.agente_tipo)
     setCampaignName(`Plantilla - ${t.name}`)
@@ -791,6 +842,11 @@ export default function Campaigns() {
 
   async function onCreateCampaign() {
     setError(null)
+    if (complianceSigned === false) {
+      setComplianceGateOpen(true)
+      setError('Debes firmar tu declaración de cumplimiento antes de crear campañas.')
+      return
+    }
     if (!canGoStep3()) {
       setError('Revisa los campos antes de crear la campaña.')
       return
@@ -2375,6 +2431,49 @@ export default function Campaigns() {
             >
               Cancelar
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {complianceGateOpen ? (
+        <div
+          className="fixed inset-0 z-[75] flex items-center justify-center px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="compliance-gate-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/75"
+            aria-label="Cerrar"
+            onClick={() => setComplianceGateOpen(false)}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0b0b0b] p-5 shadow-2xl ring-1 ring-amber-500/20">
+            <h3
+              id="compliance-gate-title"
+              className="text-base font-semibold tracking-tight text-zinc-100"
+            >
+              Declaración de cumplimiento requerida
+            </h3>
+            <p className="mt-2 text-sm text-zinc-400">
+              Debes firmar tu declaración de cumplimiento antes de lanzar campañas.
+            </p>
+            <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setComplianceGateOpen(false)}
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-900"
+              >
+                Cerrar
+              </button>
+              <Link
+                to="/compliance"
+                onClick={() => setComplianceGateOpen(false)}
+                className="inline-flex items-center justify-center rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455]"
+              >
+                Ir a Compliance →
+              </Link>
+            </div>
           </div>
         </div>
       ) : null}
