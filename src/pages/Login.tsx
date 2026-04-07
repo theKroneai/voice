@@ -304,8 +304,6 @@ export default function Login() {
               </Link>
             </p>
           )}
-
-          <div className="text-xs text-zinc-600">Email y contraseña (Supabase Auth).</div>
         </form>
       </div>
     </div>
