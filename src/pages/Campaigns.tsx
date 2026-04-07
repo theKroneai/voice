@@ -13,6 +13,13 @@ type AgentTypeId =
   | 'ask_referrals'
   | 'referral_gift'
   | 'custom'
+  | 'appointment_confirmation'
+  | 'web_lead'
+  | 'facebook_lead'
+  | 'reactivation'
+  | 'google_review'
+  | 'quote_followup'
+  | 'inbound_receptionist'
 
 type Language = 'ES' | 'EN' | 'AUTO'
 type Plan = 'BASIC' | 'PRO' | 'PREMIUM'
@@ -59,6 +66,263 @@ const AGENT_TYPES: Array<{
   { id: 'referral_gift', title: 'Regalo por Referido', emoji: '🎁', description: 'Notifica sobre regalo por referir clientes', idealFor: 'programas de referidos' },
   { id: 'custom', title: 'Personalizado', emoji: '✏️', description: 'Diseña tu propio guión desde cero', idealFor: 'casos específicos' },
 ]
+
+const EXTRA_AGENT_TYPES: Array<{
+  id: AgentTypeId
+  title: string
+  emoji: string
+  description: string
+  idealFor: string
+}> = [
+  {
+    id: 'appointment_confirmation',
+    title: 'Confirmación de Cita',
+    emoji: '📅',
+    description: 'Confirma citas programadas y reduce no-shows.',
+    idealFor: 'clínicas, servicios con agenda',
+  },
+  {
+    id: 'web_lead',
+    title: 'Leads página web',
+    emoji: '🌐',
+    description: 'Responde a leads de formularios web al instante.',
+    idealFor: 'sitios con formulario de contacto',
+  },
+  {
+    id: 'facebook_lead',
+    title: 'Leads Meta Ads',
+    emoji: '📘',
+    description: 'Llama a leads de Facebook e Instagram Ads.',
+    idealFor: 'campañas Lead Ads',
+  },
+  {
+    id: 'reactivation',
+    title: 'Reactivación de clientes',
+    emoji: '🔄',
+    description: 'Vuelve a contactar clientes inactivos con ofertas.',
+    idealFor: 'bases históricas',
+  },
+  {
+    id: 'google_review',
+    title: 'Reseñas Google',
+    emoji: '⭐',
+    description: 'Pide reseñas a clientes satisfechos.',
+    idealFor: 'reputación local',
+  },
+  {
+    id: 'quote_followup',
+    title: 'Seguimiento de cotización',
+    emoji: '💰',
+    description: 'Da seguimiento tras enviar cotizaciones.',
+    idealFor: 'equipos de ventas',
+  },
+  {
+    id: 'inbound_receptionist',
+    title: 'Recepcionista virtual',
+    emoji: '📞',
+    description: 'Atiende llamadas entrantes automáticamente.',
+    idealFor: 'línea 24/7',
+  },
+]
+
+const ALL_AGENT_TYPES = [...AGENT_TYPES, ...EXTRA_AGENT_TYPES]
+
+type CampaignTemplateDef = {
+  id: string
+  emoji: string
+  name: string
+  description: string
+  badge: string
+  badgeClass: string
+  requiresIntegration: boolean
+  cardClass: string
+  bannerVariant: 'yellow' | 'blue' | 'green' | null
+  bannerText: string | null
+  config: {
+    agente_tipo: AgentTypeId
+    max_intentos: number
+    cadencia_dias: number
+    hora_inicio: string
+    hora_fin: string
+    status: 'draft' | 'active'
+  }
+}
+
+const CAMPAIGN_TEMPLATES: CampaignTemplateDef[] = [
+  {
+    id: 'prospeccion-frio',
+    emoji: '🎯',
+    name: 'Prospección en Frío',
+    description: 'Llama a leads nuevos y presenta tu servicio. Ideal para cualquier nicho.',
+    badge: 'Más popular',
+    badgeClass: 'bg-[#22c55e]/20 text-[#86efac] ring-[#22c55e]/30',
+    requiresIntegration: false,
+    cardClass: 'hover:border-[#22c55e]/60',
+    bannerVariant: null,
+    bannerText: null,
+    config: {
+      agente_tipo: 'cold_call',
+      max_intentos: 5,
+      cadencia_dias: 2,
+      hora_inicio: '09:00',
+      hora_fin: '20:00',
+      status: 'active',
+    },
+  },
+  {
+    id: 'confirmacion-cita',
+    emoji: '📅',
+    name: 'Confirmación de Cita',
+    description: 'Confirma citas programadas y reduce los no-shows hasta un 80%.',
+    badge: 'Alta conversión',
+    badgeClass: 'bg-sky-500/20 text-sky-300 ring-sky-500/30',
+    requiresIntegration: false,
+    cardClass: 'hover:border-sky-500/50',
+    bannerVariant: null,
+    bannerText: null,
+    config: {
+      agente_tipo: 'appointment_confirmation',
+      max_intentos: 3,
+      cadencia_dias: 1,
+      hora_inicio: '08:00',
+      hora_fin: '18:00',
+      status: 'draft',
+    },
+  },
+  {
+    id: 'leads-web',
+    emoji: '🌐',
+    name: 'Leads Página Web',
+    description: 'Responde automáticamente a leads de tu sitio web en menos de 60 segundos.',
+    badge: 'Respuesta rápida',
+    badgeClass: 'bg-cyan-500/20 text-cyan-300 ring-cyan-500/30',
+    requiresIntegration: true,
+    cardClass: 'border-dashed border-cyan-500/40 hover:border-cyan-400/70',
+    bannerVariant: 'yellow',
+    bannerText:
+      '⚡ Requiere conectar tu formulario web en Integraciones → CRM Personalizado',
+    config: {
+      agente_tipo: 'web_lead',
+      max_intentos: 4,
+      cadencia_dias: 1,
+      hora_inicio: '08:00',
+      hora_fin: '21:00',
+      status: 'draft',
+    },
+  },
+  {
+    id: 'leads-meta',
+    emoji: '📘',
+    name: 'Leads Facebook/Instagram Ads',
+    description: 'Llama a tus leads de Facebook e Instagram en segundos de que llenen el form.',
+    badge: 'Meta Ads',
+    badgeClass: 'bg-[#1877F2]/25 text-[#8bb3ff] ring-[#1877F2]/40',
+    requiresIntegration: true,
+    cardClass: 'border-dashed border-[#1877F2]/50 hover:border-[#1877F2]/80',
+    bannerVariant: 'blue',
+    bannerText: `📘 Requiere conectar Meta Lead Ads en Lead Response → Nueva fuente de leads
+
+Pasos:
+1. Ve a Lead Response en el menú
+2. Clic en "+ Nueva Fuente de Leads"
+3. Selecciona "Facebook/Instagram Ads"
+4. Sigue las instrucciones de conexión`,
+    config: {
+      agente_tipo: 'facebook_lead',
+      max_intentos: 5,
+      cadencia_dias: 1,
+      hora_inicio: '08:00',
+      hora_fin: '21:00',
+      status: 'draft',
+    },
+  },
+  {
+    id: 'reactivacion',
+    emoji: '🔄',
+    name: 'Reactivación de Clientes',
+    description: 'Reactiva clientes inactivos con una oferta especial personalizada.',
+    badge: 'Alto ROI',
+    badgeClass: 'bg-amber-500/20 text-amber-200 ring-amber-500/35',
+    requiresIntegration: false,
+    cardClass: 'hover:border-amber-500/50',
+    bannerVariant: null,
+    bannerText: null,
+    config: {
+      agente_tipo: 'reactivation',
+      max_intentos: 3,
+      cadencia_dias: 3,
+      hora_inicio: '10:00',
+      hora_fin: '19:00',
+      status: 'draft',
+    },
+  },
+  {
+    id: 'google-review',
+    emoji: '⭐',
+    name: 'Solicitar Reseñas Google',
+    description: 'Llama a clientes satisfechos y pídeles que dejen una reseña en Google.',
+    badge: 'Reputación',
+    badgeClass: 'bg-yellow-500/20 text-yellow-200 ring-yellow-500/35',
+    requiresIntegration: false,
+    cardClass: 'hover:border-yellow-500/45',
+    bannerVariant: null,
+    bannerText: null,
+    config: {
+      agente_tipo: 'google_review',
+      max_intentos: 2,
+      cadencia_dias: 1,
+      hora_inicio: '10:00',
+      hora_fin: '18:00',
+      status: 'draft',
+    },
+  },
+  {
+    id: 'cotizacion',
+    emoji: '💰',
+    name: 'Seguimiento de Cotización',
+    description: 'Haz seguimiento a clientes que recibieron una cotización pero no compraron.',
+    badge: 'Ventas',
+    badgeClass: 'bg-orange-500/20 text-orange-200 ring-orange-500/35',
+    requiresIntegration: false,
+    cardClass: 'hover:border-orange-500/50',
+    bannerVariant: null,
+    bannerText: null,
+    config: {
+      agente_tipo: 'quote_followup',
+      max_intentos: 4,
+      cadencia_dias: 2,
+      hora_inicio: '09:00',
+      hora_fin: '19:00',
+      status: 'draft',
+    },
+  },
+  {
+    id: 'recepcionista',
+    emoji: '📞',
+    name: 'Recepcionista Virtual 24/7',
+    description: 'Atiende llamadas entrantes automáticamente las 24 horas del día.',
+    badge: 'Inbound',
+    badgeClass: 'bg-violet-500/20 text-violet-200 ring-violet-500/35',
+    requiresIntegration: true,
+    cardClass: 'border-dashed border-violet-500/45 hover:border-violet-400/70',
+    bannerVariant: 'green',
+    bannerText:
+      '📞 Para activar llamadas entrantes ve a Recepcionista Virtual en el menú lateral',
+    config: {
+      agente_tipo: 'inbound_receptionist',
+      max_intentos: 1,
+      cadencia_dias: 0,
+      hora_inicio: '00:00',
+      hora_fin: '23:59',
+      status: 'draft',
+    },
+  },
+]
+
+function getAgentTypeMeta(id: AgentTypeId | null) {
+  if (!id) return null
+  return ALL_AGENT_TYPES.find((a) => a.id === id) ?? null
+}
 
 const PLAN_LABEL: Record<Plan, string> = {
   BASIC: 'Básico $0.45/min',
@@ -164,6 +428,13 @@ function PillButton({
 export default function Campaigns() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [modalPhase, setModalPhase] = useState<'choice' | 'templates' | 'wizard'>('choice')
+  const [wizardFromTemplate, setWizardFromTemplate] = useState(false)
+  const [templateBannerText, setTemplateBannerText] = useState<string | null>(null)
+  const [templateBannerVariant, setTemplateBannerVariant] = useState<
+    'yellow' | 'blue' | 'green' | null
+  >(null)
+  const [newCampaignStatus, setNewCampaignStatus] = useState<'draft' | 'active'>('draft')
   const [step, setStep] = useState<1 | 2 | 3>(1)
 
   const [agentType, setAgentType] = useState<AgentTypeId | null>(null)
@@ -172,6 +443,7 @@ export default function Campaigns() {
   const [language, setLanguage] = useState<Language>('ES')
   const [plan, setPlan] = useState<Plan>('BASIC')
   const [maxAttempts, setMaxAttempts] = useState<number>(3)
+  const [cadenciaDias, setCadenciaDias] = useState(1)
   const [callStart, setCallStart] = useState('09:00')
   const [callEnd, setCallEnd] = useState('18:00')
   const [smsEnabled, setSmsEnabled] = useState(false)
@@ -209,14 +481,33 @@ export default function Campaigns() {
   const [editGoogleReviewLink, setEditGoogleReviewLink] = useState('')
   const [savingEdit, setSavingEdit] = useState(false)
 
+  const [creditsPlanVoz, setCreditsPlanVoz] = useState<string | null>(null)
+  const [smsDisponibles, setSmsDisponibles] = useState(0)
+  const [smsUpsellOpen, setSmsUpsellOpen] = useState(false)
+
+  const anyModalOpen = open || editOpen || smsUpsellOpen
+  useEffect(() => {
+    if (anyModalOpen) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [anyModalOpen])
+
+  const nicheSelectClassName =
+    'w-full rounded-lg bg-[#0b0b0b] px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e]'
+
   const selectedAgentLabel = useMemo(() => {
-    const found = AGENT_TYPES.find((a) => a.id === agentType)
+    const found = getAgentTypeMeta(agentType)
     return found ? `${found.emoji} ${found.title}` : 'No seleccionado'
   }, [agentType])
 
   const agentEmojiById = useMemo(() => {
     const map = new Map<AgentTypeId, string>()
-    for (const a of AGENT_TYPES) map.set(a.id, a.emoji)
+    for (const a of ALL_AGENT_TYPES) map.set(a.id, a.emoji)
     return map
   }, [])
 
@@ -225,7 +516,37 @@ export default function Campaigns() {
     return found?.nicho ?? ''
   }, [nichos, selectedNichoId])
 
+  function handleSmsToggleClick() {
+    if (smsEnabled) {
+      setSmsEnabled(false)
+      return
+    }
+    const plan = (creditsPlanVoz ?? '').toLowerCase()
+    if (plan === 'cazador') {
+      setSmsEnabled(true)
+      return
+    }
+    if (plan === 'prospectador' || plan === 'vendedor') {
+      if (smsDisponibles > 0) {
+        setSmsEnabled(true)
+        return
+      }
+      setSmsUpsellOpen(true)
+      return
+    }
+    if (smsDisponibles > 0) {
+      setSmsEnabled(true)
+      return
+    }
+    setSmsUpsellOpen(true)
+  }
+
   function resetForm() {
+    setModalPhase('choice')
+    setWizardFromTemplate(false)
+    setTemplateBannerText(null)
+    setTemplateBannerVariant(null)
+    setNewCampaignStatus('draft')
     setStep(1)
     setAgentType(null)
     setCampaignName('')
@@ -233,6 +554,7 @@ export default function Campaigns() {
     setLanguage('ES')
     setPlan('BASIC')
     setMaxAttempts(3)
+    setCadenciaDias(1)
     setCallStart('09:00')
     setCallEnd('18:00')
     setSmsEnabled(false)
@@ -246,8 +568,36 @@ export default function Campaigns() {
     setOpen(true)
   }
 
+  function openModalToTemplates() {
+    resetForm()
+    setModalPhase('templates')
+    setOpen(true)
+  }
+
+  function applyTemplate(t: CampaignTemplateDef) {
+    const cfg = t.config
+    setAgentType(cfg.agente_tipo)
+    setCampaignName(`Plantilla - ${t.name}`)
+    setCompanyName('')
+    setMaxAttempts(Math.min(10, Math.max(1, cfg.max_intentos)))
+    setCadenciaDias(Math.max(0, cfg.cadencia_dias))
+    setCallStart(cfg.hora_inicio)
+    setCallEnd(cfg.hora_fin)
+    setNewCampaignStatus(cfg.status)
+    setTemplateBannerText(t.bannerText)
+    setTemplateBannerVariant(t.bannerVariant)
+    setSmsEnabled(false)
+    setSmsTemplate('')
+    setWizardFromTemplate(true)
+    setModalPhase('wizard')
+    setStep(2)
+    setError(null)
+    setOpen(true)
+  }
+
   function closeModal() {
     setOpen(false)
+    resetForm()
   }
 
   function showToast(type: 'success' | 'error', message: string) {
@@ -368,12 +718,17 @@ export default function Campaigns() {
         console.log('users data:', dbgU)
         // eslint-disable-next-line no-console
         console.log('users error:', dbgUErr)
-        const [userRes, nichosRes] = await Promise.all([
+        const [userRes, nichosRes, creditsRes] = await Promise.all([
           supabase.from('users').select('nicho').eq('id', userId).maybeSingle(),
           supabase
             .from('nicho_templates')
             .select('id, nicho')
             .order('nicho', { ascending: true }),
+          supabase
+            .from('credits')
+            .select('plan_voz, sms_disponibles')
+            .eq('user_id', userId)
+            .maybeSingle(),
         ])
 
         if (!mounted) return
@@ -385,6 +740,13 @@ export default function Campaigns() {
         const nichosData = nichosRes.data
         const list = (nichosData ?? []) as NichoTemplate[]
         setNichos(list)
+        const cr = creditsRes.data as
+          | { plan_voz?: string | null; sms_disponibles?: number | null }
+          | null
+        setCreditsPlanVoz(cr?.plan_voz != null ? String(cr.plan_voz) : null)
+        setSmsDisponibles(
+          Math.max(0, Math.floor(Number(cr?.sms_disponibles) || 0)),
+        )
         const userNicho = userRes.data?.nicho ?? null
         setUserDefaultNicho(userNicho)
 
@@ -399,6 +761,8 @@ export default function Campaigns() {
       } catch {
         if (mounted) {
           setNichos([])
+          setCreditsPlanVoz(null)
+          setSmsDisponibles(0)
         }
       }
     })()
@@ -418,6 +782,8 @@ export default function Campaigns() {
       companyName.trim().length > 0 &&
       maxAttempts >= 1 &&
       maxAttempts <= 10 &&
+      cadenciaDias >= 0 &&
+      cadenciaDias <= 30 &&
       callStart.length > 0 &&
       callEnd.length > 0
     )
@@ -449,9 +815,10 @@ export default function Campaigns() {
         max_intentos: maxAttempts,
         hora_inicio: callStart,
         hora_fin: callEnd,
+        cadencia_dias: cadenciaDias,
         numero_telefono: '',
         nicho: selectedNichoLabel || userDefaultNicho || null,
-        status: 'draft',
+        status: newCampaignStatus,
         sms_enabled: smsEnabled,
         sms_template: smsEnabled ? (smsTemplate.trim().slice(0, 160) || null) : null,
       }
@@ -603,6 +970,7 @@ export default function Campaigns() {
         max_intentos: c.max_intentos,
         hora_inicio: c.hora_inicio ?? '09:00',
         hora_fin: c.hora_fin ?? '18:00',
+        cadencia_dias: c.cadencia_dias ?? 1,
         numero_telefono: '',
         nicho: c.nicho,
         status: 'draft',
@@ -733,13 +1101,77 @@ export default function Campaigns() {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={openModal}
-          className="mt-4 rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] transition"
-        >
-          + Nueva Campaña Outbound
-        </button>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={openModal}
+            className="rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] transition"
+          >
+            + Nueva Campaña Outbound
+          </button>
+          <button
+            type="button"
+            onClick={openModalToTemplates}
+            className="rounded-lg border border-zinc-700/80 bg-zinc-900/40 px-4 py-2 text-sm font-medium theme-text-muted hover:bg-zinc-800/60 transition"
+          >
+            Ver plantillas
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
+        <h2 className="text-base font-semibold theme-text-primary">
+          Plantillas de campaña
+        </h2>
+        <p className="mt-1 text-sm theme-text-muted max-w-3xl">
+          Crea campañas al instante con horarios, intentos y cadencia ya definidos. Solo elige nicho y
+          nombre, o abre el asistente con &quot;Nueva campaña&quot; para elegir entre plantilla o
+          configuración manual.
+        </p>
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {CAMPAIGN_TEMPLATES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => applyTemplate(t)}
+              className={[
+                'relative text-left rounded-2xl border theme-border/80 theme-bg-base p-4 transition cursor-pointer',
+                t.cardClass,
+              ].join(' ')}
+            >
+              {t.requiresIntegration ? (
+                <span className="absolute right-3 top-3 text-xs" title="Requiere configuración">
+                  🔗
+                </span>
+              ) : null}
+              <div className="flex items-start gap-2 pr-8">
+                <span className="text-2xl">{t.emoji}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold theme-text-primary">{t.name}</div>
+                  <p className="mt-1 text-xs theme-text-muted line-clamp-3">{t.description}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <span
+                      className={[
+                        'inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1',
+                        t.badgeClass,
+                      ].join(' ')}
+                    >
+                      {t.badge}
+                    </span>
+                    {t.requiresIntegration ? (
+                      <span className="inline-flex rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] font-medium theme-text-muted ring-1 ring-zinc-600/60">
+                        Requiere config
+                      </span>
+                    ) : null}
+                  </div>
+                  <span className="mt-3 inline-block text-xs font-semibold text-[#22c55e]">
+                    Usar plantilla →
+                  </span>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
 
       {campaignsError ? (
@@ -906,10 +1338,18 @@ export default function Campaigns() {
             <div className="flex items-start justify-between gap-3 border-b theme-border/80 px-5 py-4">
               <div>
                 <div className="text-base font-semibold theme-text-primary">
-                  Nueva Campaña
+                  {modalPhase === 'choice'
+                    ? 'Nueva campaña'
+                    : modalPhase === 'templates'
+                      ? 'Plantillas de campaña'
+                      : 'Nueva Campaña'}
                 </div>
                 <div className="mt-1 text-sm theme-text-muted">
-                  Paso {step} de 3
+                  {modalPhase === 'wizard'
+                    ? `Paso ${step} de 3`
+                    : modalPhase === 'choice'
+                      ? '¿Cómo quieres crear tu campaña?'
+                      : 'Elige una plantilla o vuelve atrás'}
                 </div>
               </div>
               <button
@@ -923,7 +1363,116 @@ export default function Campaigns() {
             </div>
 
             <div className="px-5 py-5">
-              {step === 1 ? (
+              {modalPhase === 'choice' ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null)
+                        setModalPhase('templates')
+                      }}
+                      className="rounded-2xl border border-[#22c55e]/50 bg-[#22c55e]/10 px-5 py-8 text-left transition hover:bg-[#22c55e]/15 hover:border-[#22c55e] cursor-pointer"
+                    >
+                      <div className="text-lg font-semibold theme-text-primary">
+                        Desde plantilla
+                      </div>
+                      <p className="mt-2 text-sm theme-text-muted">
+                        Configuración predefinida para empezar en segundos.
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setError(null)
+                        setWizardFromTemplate(false)
+                        setModalPhase('wizard')
+                        setStep(1)
+                        setTemplateBannerText(null)
+                        setTemplateBannerVariant(null)
+                        setNewCampaignStatus('draft')
+                      }}
+                      className="rounded-2xl border theme-border/80 theme-bg-base px-5 py-8 text-left transition hover:border-zinc-600 hover:bg-zinc-900/30 cursor-pointer"
+                    >
+                      <div className="text-lg font-semibold theme-text-primary">
+                        Crear desde cero
+                      </div>
+                      <p className="mt-2 text-sm theme-text-muted">
+                        Elige el tipo de agente y configura todo manualmente.
+                      </p>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {modalPhase === 'templates' ? (
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {CAMPAIGN_TEMPLATES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => applyTemplate(t)}
+                        className={[
+                          'relative text-left rounded-2xl border theme-border/80 theme-bg-base p-4 transition cursor-pointer',
+                          t.cardClass,
+                        ].join(' ')}
+                      >
+                        {t.requiresIntegration ? (
+                          <span className="absolute right-3 top-3 text-xs" title="Requiere configuración">
+                            🔗
+                          </span>
+                        ) : null}
+                        <div className="flex items-start gap-2 pr-8">
+                          <span className="text-2xl">{t.emoji}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold theme-text-primary">
+                              {t.name}
+                            </div>
+                            <p className="mt-1 text-xs theme-text-muted line-clamp-3">
+                              {t.description}
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <span
+                                className={[
+                                  'inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ring-1',
+                                  t.badgeClass,
+                                ].join(' ')}
+                              >
+                                {t.badge}
+                              </span>
+                              {t.requiresIntegration ? (
+                                <span className="inline-flex rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] font-medium theme-text-muted ring-1 ring-zinc-600/60">
+                                  Requiere config
+                                </span>
+                              ) : null}
+                            </div>
+                            <span className="mt-3 inline-block text-xs font-semibold text-[#22c55e]">
+                              Usar plantilla →
+                            </span>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWizardFromTemplate(false)
+                      setModalPhase('wizard')
+                      setStep(1)
+                      setTemplateBannerText(null)
+                      setTemplateBannerVariant(null)
+                      setNewCampaignStatus('draft')
+                    }}
+                    className="w-full rounded-xl border border-zinc-700/80 bg-zinc-900/40 px-4 py-3 text-sm font-medium theme-text-muted hover:bg-zinc-800/60 transition"
+                  >
+                    Crear desde cero
+                  </button>
+                </div>
+              ) : null}
+
+              {modalPhase === 'wizard' && step === 1 ? (
                 <div className="space-y-4">
                   <div>
                     <div className="text-sm font-semibold theme-text-primary">
@@ -968,7 +1517,7 @@ export default function Campaigns() {
                 </div>
               ) : null}
 
-              {step === 2 ? (
+              {modalPhase === 'wizard' && step === 2 ? (
                 <div className="space-y-5">
                   <div>
                     <div className="text-sm font-semibold theme-text-primary">
@@ -986,14 +1535,15 @@ export default function Campaigns() {
                           Agente seleccionado:
                         </span>
                         <span className="text-sm font-semibold theme-text-primary">
-                          {agentEmojiById.get(agentType)} {AGENT_TYPES.find((a) => a.id === agentType)?.title}
+                          {agentEmojiById.get(agentType)}{' '}
+                          {getAgentTypeMeta(agentType)?.title}
                         </span>
                         <span className="rounded-full bg-orange-500/20 px-2 py-0.5 text-[10px] font-medium text-orange-300">
                           OUTBOUND
                         </span>
                       </div>
                       <p className="mt-1 text-xs theme-text-muted">
-                        {AGENT_TYPES.find((a) => a.id === agentType)?.description}
+                        {getAgentTypeMeta(agentType)?.description}
                       </p>
                     </div>
                   ) : null}
@@ -1116,6 +1666,24 @@ export default function Campaigns() {
                     </div>
                   </div>
 
+                  <div className="space-y-2 max-w-xs">
+                    <FieldLabel htmlFor="cadenciaDias">
+                      Cadencia (días entre intentos)
+                    </FieldLabel>
+                    <select
+                      id="cadenciaDias"
+                      value={cadenciaDias}
+                      onChange={(e) => setCadenciaDias(Number(e.target.value))}
+                      className="w-full rounded-lg theme-bg-base px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                    >
+                      {Array.from({ length: 31 }, (_, i) => i).map((n) => (
+                        <option key={n} value={n}>
+                          {n === 0 ? 'Sin espera (0)' : `${n} día${n === 1 ? '' : 's'}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm theme-text-muted">
@@ -1125,7 +1693,7 @@ export default function Campaigns() {
                         type="button"
                         role="switch"
                         aria-checked={smsEnabled}
-                        onClick={() => setSmsEnabled((v) => !v)}
+                        onClick={handleSmsToggleClick}
                         className={[
                           'relative inline-flex h-6 w-11 shrink-0 rounded-full ring-1 transition',
                           smsEnabled
@@ -1142,6 +1710,18 @@ export default function Campaigns() {
                         />
                       </button>
                     </div>
+                    {(creditsPlanVoz ?? '').toLowerCase() === 'cazador' ? (
+                      <p className="text-xs text-emerald-300/95">
+                        ✅ Tu plan Cazador incluye SMS automático
+                      </p>
+                    ) : null}
+                    {(creditsPlanVoz ?? '').toLowerCase() !== 'cazador' &&
+                    smsDisponibles > 0 ? (
+                      <p className="text-xs text-zinc-400">
+                        💬 Tienes {smsDisponibles} SMS disponibles ($0.05 por
+                        mensaje — descontado de tus créditos)
+                      </p>
+                    ) : null}
                     {smsEnabled ? (
                       <div className="space-y-2">
                         <FieldLabel htmlFor="smsTemplate">Mensaje SMS</FieldLabel>
@@ -1167,52 +1747,59 @@ export default function Campaigns() {
                   </div>
 
                   <div className="space-y-2">
-                    <div className="text-sm theme-text-muted">Nicho</div>
+                    <FieldLabel htmlFor="campaignNicho">Nicho</FieldLabel>
                     {nichos.length === 0 ? (
                       <div className="text-xs theme-text-dim">
                         No hay nichos configurados
                       </div>
                     ) : (
-                      <div className="space-y-4">
+                      <select
+                        id="campaignNicho"
+                        value={selectedNichoId ?? ''}
+                        onChange={(e) =>
+                          setSelectedNichoId(e.target.value ? e.target.value : null)
+                        }
+                        className={nicheSelectClassName}
+                      >
+                        <option value="">Selecciona un nicho</option>
                         {CATEGORIAS_NICHO.map((cat) => {
                           const nichosInCat = nichos.filter(
-                            (n) => getNichoCategoriaKey(n.nicho) === cat.key
+                            (n) => getNichoCategoriaKey(n.nicho) === cat.key,
                           )
                           if (nichosInCat.length === 0) return null
                           return (
-                            <div key={cat.key}>
-                              <div className="mb-2 flex items-center gap-2 text-xs font-medium theme-text-muted">
-                                <span>{cat.emoji}</span>
-                                <span>{cat.label}</span>
-                              </div>
-                              <div className="flex flex-wrap gap-2">
-                                {nichosInCat.map((n) => {
-                                  const active = selectedNichoId === n.id
-                                  const emoji = getNichoEmoji(n.nicho)
-                                  return (
-                                    <button
-                                      key={n.id}
-                                      type="button"
-                                      onClick={() => setSelectedNichoId(n.id)}
-                                      className={[
-                                        'rounded-full px-3 py-1.5 text-sm font-medium ring-1 transition',
-                                        active
-                                          ? 'bg-[#22c55e] text-[#0b0b0b] ring-[#22c55e]'
-                                          : 'theme-bg-base theme-text-secondary ring-zinc-800/80 hover:bg-zinc-900/40',
-                                      ].join(' ')}
-                                    >
-                                      <span className="mr-1">{emoji}</span>
-                                      {n.nicho}
-                                    </button>
-                                  )
-                                })}
-                              </div>
-                            </div>
+                            <optgroup
+                              key={cat.key}
+                              label={`${cat.emoji} ${cat.label}`}
+                            >
+                              {nichosInCat.map((n) => (
+                                <option key={n.id} value={n.id}>
+                                  {getNichoEmoji(n.nicho)} {n.nicho}
+                                </option>
+                              ))}
+                            </optgroup>
                           )
                         })}
-                      </div>
+                      </select>
                     )}
                   </div>
+
+                  {templateBannerText ? (
+                    <div
+                      className={[
+                        'rounded-xl border px-3 py-3 text-xs theme-text-secondary whitespace-pre-wrap',
+                        templateBannerVariant === 'yellow'
+                          ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
+                          : templateBannerVariant === 'blue'
+                            ? 'border-sky-500/40 bg-sky-500/10 text-sky-100'
+                            : templateBannerVariant === 'green'
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+                              : 'border-zinc-600 bg-zinc-900/40',
+                      ].join(' ')}
+                    >
+                      {templateBannerText}
+                    </div>
+                  ) : null}
 
                   {error ? (
                     <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
@@ -1222,7 +1809,7 @@ export default function Campaigns() {
                 </div>
               ) : null}
 
-              {step === 3 ? (
+              {modalPhase === 'wizard' && step === 3 ? (
                 <div className="space-y-5">
                   <div>
                     <div className="text-sm font-semibold theme-text-primary">
@@ -1304,6 +1891,16 @@ export default function Campaigns() {
                           {maxAttempts}
                         </div>
                       </div>
+                      <div>
+                        <div className="text-xs uppercase tracking-wide theme-text-dim">
+                          Cadencia
+                        </div>
+                        <div className="mt-1 text-sm font-medium theme-text-primary">
+                          {cadenciaDias === 0
+                            ? 'Sin espera entre intentos'
+                            : `${cadenciaDias} día${cadenciaDias === 1 ? '' : 's'}`}
+                        </div>
+                      </div>
                       <div className="sm:col-span-2">
                         <div className="text-xs uppercase tracking-wide theme-text-dim">
                           Horario de llamadas
@@ -1312,9 +1909,45 @@ export default function Campaigns() {
                           {callStart} — {callEnd}
                         </div>
                       </div>
+                      <div>
+                        <div className="text-xs uppercase tracking-wide theme-text-dim">
+                          Estado al crear
+                        </div>
+                        <div className="mt-1 text-sm font-medium theme-text-primary">
+                          {newCampaignStatus === 'active' ? 'Activa' : 'Borrador'}
+                        </div>
+                      </div>
                     </div>
+                    {templateBannerText ? (
+                      <div
+                        className={[
+                          'mt-4 rounded-xl border px-3 py-3 text-xs whitespace-pre-wrap',
+                          templateBannerVariant === 'yellow'
+                            ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
+                            : templateBannerVariant === 'blue'
+                              ? 'border-sky-500/40 bg-sky-500/10 text-sky-100'
+                              : templateBannerVariant === 'green'
+                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+                                : 'border-zinc-600 bg-zinc-900/40 theme-text-secondary',
+                        ].join(' ')}
+                      >
+                        {templateBannerText}
+                      </div>
+                    ) : null}
                     <p className="mt-4 rounded-lg border border-zinc-700/60 bg-zinc-800/40 px-3 py-2 text-xs theme-text-muted">
-                      ℹ️ Tu campaña quedará en estado BORRADOR. Actívala cuando estés listo para empezar.
+                      {newCampaignStatus === 'active' ? (
+                        <>
+                          ℹ️ La campaña se creará en estado{' '}
+                          <span className="font-semibold text-[#86efac]">ACTIVA</span>. Puedes pausarla
+                          desde el listado cuando quieras.
+                        </>
+                      ) : (
+                        <>
+                          ℹ️ Tu campaña quedará en estado{' '}
+                          <span className="font-semibold">BORRADOR</span>. Actívala cuando estés listo
+                          para empezar.
+                        </>
+                      )}
                     </p>
                   </div>
 
@@ -1337,20 +1970,55 @@ export default function Campaigns() {
               </button>
 
               <div className="flex items-center gap-2 justify-end">
-                {step > 1 ? (
+                {modalPhase === 'choice' ? null : modalPhase === 'templates' ? (
                   <button
                     type="button"
                     onClick={() => {
                       setError(null)
-                      setStep((s) => (s === 3 ? 2 : 1))
+                      setModalPhase('choice')
+                    }}
+                    className="rounded-lg px-3 py-2 text-sm font-medium theme-text-secondary ring-1 ring-zinc-800/80 hover:bg-zinc-900/40 transition"
+                  >
+                    Volver
+                  </button>
+                ) : modalPhase === 'wizard' && step > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null)
+                      if (step === 3) {
+                        setStep(2)
+                        return
+                      }
+                      if (step === 2) {
+                        if (wizardFromTemplate) {
+                          setModalPhase('templates')
+                          setStep(1)
+                          setWizardFromTemplate(false)
+                          return
+                        }
+                        setStep(1)
+                      }
                     }}
                     className="rounded-lg px-3 py-2 text-sm font-medium theme-text-secondary ring-1 ring-zinc-800/80 hover:bg-zinc-900/40 transition"
                   >
                     Atrás
                   </button>
+                ) : modalPhase === 'wizard' && step === 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError(null)
+                      setModalPhase('choice')
+                      setStep(1)
+                    }}
+                    className="rounded-lg px-3 py-2 text-sm font-medium theme-text-secondary ring-1 ring-zinc-800/80 hover:bg-zinc-900/40 transition"
+                  >
+                    Volver
+                  </button>
                 ) : null}
 
-                {step < 3 ? (
+                {modalPhase === 'choice' || modalPhase === 'templates' ? null : step < 3 ? (
                   <button
                     type="button"
                     onClick={() => {
@@ -1447,14 +2115,27 @@ export default function Campaigns() {
                     id="editNicho"
                     value={editNicho}
                     onChange={(e) => setEditNicho(e.target.value)}
-                    className="w-full rounded-lg theme-bg-base px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
+                    className={nicheSelectClassName}
                   >
-                    <option value="">Sin nicho</option>
-                    {nichos.map((n) => (
-                      <option key={n.id} value={n.nicho}>
-                        {n.nicho}
-                      </option>
-                    ))}
+                    <option value="">Selecciona un nicho</option>
+                    {CATEGORIAS_NICHO.map((cat) => {
+                      const nichosInCat = nichos.filter(
+                        (n) => getNichoCategoriaKey(n.nicho) === cat.key,
+                      )
+                      if (nichosInCat.length === 0) return null
+                      return (
+                        <optgroup
+                          key={cat.key}
+                          label={`${cat.emoji} ${cat.label}`}
+                        >
+                          {nichosInCat.map((n) => (
+                            <option key={n.id} value={n.nicho}>
+                              {getNichoEmoji(n.nicho)} {n.nicho}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )
+                    })}
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -1465,7 +2146,7 @@ export default function Campaigns() {
                     onChange={(e) => setEditAgenteTipo(e.target.value as AgentTypeId)}
                     className="w-full rounded-lg theme-bg-base px-3 py-2 text-sm text-zinc-100 ring-1 ring-zinc-800/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e]"
                   >
-                    {AGENT_TYPES.map((a) => (
+                    {ALL_AGENT_TYPES.map((a) => (
                       <option key={a.id} value={a.id}>
                         {a.emoji} {a.title}
                       </option>
@@ -1613,6 +2294,87 @@ export default function Campaigns() {
                 {savingEdit ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {smsUpsellOpen ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="sms-upsell-title"
+        >
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/75"
+            aria-label="Cerrar"
+            onClick={() => setSmsUpsellOpen(false)}
+          />
+          <div className="relative w-full max-w-lg rounded-2xl border border-zinc-800 bg-[#0b0b0b] p-5 shadow-2xl ring-1 ring-zinc-800/80">
+            <h3
+              id="sms-upsell-title"
+              className="text-base font-semibold tracking-tight text-zinc-100"
+            >
+              📱 SMS Automático
+            </h3>
+            <p className="mt-2 text-sm text-zinc-400">
+              Para enviar SMS necesitas:
+            </p>
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="flex flex-col rounded-xl border border-zinc-700 bg-zinc-950/80 p-4">
+                <div className="text-lg">💳</div>
+                <div className="mt-1 text-sm font-semibold text-zinc-100">
+                  Recargar créditos SMS
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                  $0.05 por SMS
+                  <br />
+                  Paga solo lo que uses
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate('/credits')
+                    setSmsUpsellOpen(false)
+                  }}
+                  className="mt-4 w-full rounded-lg border border-zinc-600 bg-zinc-900/60 px-3 py-2 text-xs font-semibold text-zinc-200 hover:bg-zinc-800 transition"
+                >
+                  Recargar →
+                </button>
+              </div>
+              <div className="relative flex flex-col rounded-xl border border-[#22c55e]/55 bg-zinc-950/80 p-4 ring-1 ring-[#22c55e]/25">
+                <span className="absolute -top-2.5 right-2 rounded-full bg-[#22c55e] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#0b0b0b]">
+                  Recomendado
+                </span>
+                <div className="text-lg">⬆️</div>
+                <div className="mt-1 text-sm font-semibold text-zinc-100">
+                  Cambiar al Plan Cazador
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                  $0.90/min
+                  <br />
+                  SMS incluido sin costo extra
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate('/credits')
+                    setSmsUpsellOpen(false)
+                  }}
+                  className="mt-4 w-full rounded-lg bg-[#22c55e] px-3 py-2 text-xs font-semibold text-[#0b0b0b] hover:bg-[#1fb455] transition"
+                >
+                  Ver plan →
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSmsUpsellOpen(false)}
+              className="mt-4 w-full rounded-lg border border-zinc-700/80 px-3 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-900/60 hover:text-zinc-200 transition"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       ) : null}

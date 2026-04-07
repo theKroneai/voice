@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CalendarCheck, Clock, Phone, TrendingUp } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { formatSaldoCreditoConMinutos } from '../lib/creditUsd'
 import {
   BarChart,
   Bar,
@@ -64,7 +65,7 @@ function getSaludoByHora(): string {
 
 export default function Dashboard() {
   const [companyName, setCompanyName] = useState('')
-  const [minutosDisponibles, setMinutosDisponibles] = useState(0)
+  const [creditoDisplay, setCreditoDisplay] = useState('$0.00')
   const [llamadasHoy, setLlamadasHoy] = useState(0)
   const [llamadasSemana, setLlamadasSemana] = useState(0)
   const [citasAgendadas, setCitasAgendadas] = useState(0)
@@ -122,10 +123,22 @@ export default function Dashboard() {
 
       const { data: credits } = await supabase
         .from('credits')
-        .select('minutos_voz')
+        .select('saldo_usd, plan_voz')
         .eq('user_id', user.id)
         .maybeSingle()
-      if (credits) setMinutosDisponibles(credits.minutos_voz ?? 0)
+      if (credits) {
+        const raw = (credits as { saldo_usd?: number | string | null }).saldo_usd
+        const saldo =
+          raw != null && Number.isFinite(Number(raw))
+            ? Math.max(0, Number(raw))
+            : 0
+        const plan = String(
+          (credits as { plan_voz?: string | null }).plan_voz ?? 'prospectador',
+        )
+        setCreditoDisplay(formatSaldoCreditoConMinutos(saldo, plan))
+      } else {
+        setCreditoDisplay('$0.00')
+      }
 
       // Referidos: activos y total ganado
       const [
@@ -540,8 +553,8 @@ export default function Dashboard() {
       {/* Métricas */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <MetricCard
-          label="Minutos Disponibles"
-          value={minutosDisponibles}
+          label="Créditos"
+          value={creditoDisplay}
           icon={<Clock className="h-4 w-4" />}
           color="green"
           loading={loading}
@@ -869,7 +882,7 @@ function MetricCard({
           {icon}
         </div>
       </div>
-      <div className="mt-3 text-3xl font-semibold tracking-tight theme-text-primary">
+      <div className="mt-3 text-3xl font-semibold tracking-tight theme-text-primary break-words leading-tight">
         {loading ? <span className="text-zinc-600">—</span> : value}
       </div>
       {sub && (

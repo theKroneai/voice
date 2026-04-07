@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { formatSaldoCreditoConMinutos } from '../lib/creditUsd'
 
 type UserProfile = {
   company_name: string | null
@@ -55,7 +56,7 @@ export default function Settings() {
     nicho: '',
     email: '',
   })
-  const [voiceMinutes, setVoiceMinutes] = useState(0)
+  const [creditoSaldoLinea, setCreditoSaldoLinea] = useState('$0.00')
   const [smsBalance, setSmsBalance] = useState(0)
   const [lastTransactions, setLastTransactions] = useState<CreditRow[]>([])
   const [loadingProfile, setLoadingProfile] = useState(true)
@@ -163,7 +164,7 @@ export default function Settings() {
           supabase.from('nicho_templates').select('id, nicho').order('nicho'),
           supabase
             .from('credits')
-            .select('minutos_voz, sms_disponibles')
+            .select('saldo_usd, plan_voz, sms_disponibles')
             .eq('user_id', userId)
             .maybeSingle(),
           supabase
@@ -222,8 +223,19 @@ export default function Settings() {
         setNichos((nichosData ?? []) as NichoTemplate[])
 
         if (credits) {
-          setVoiceMinutes((credits as { minutos_voz?: number }).minutos_voz ?? 0)
-          setSmsBalance((credits as { sms_disponibles?: number }).sms_disponibles ?? 0)
+          const cr = credits as {
+            saldo_usd?: number | string | null
+            plan_voz?: string | null
+            sms_disponibles?: number | null
+          }
+          const raw = cr.saldo_usd
+          const saldo =
+            raw != null && Number.isFinite(Number(raw))
+              ? Math.max(0, Number(raw))
+              : 0
+          const plan = String(cr.plan_voz ?? 'prospectador')
+          setCreditoSaldoLinea(formatSaldoCreditoConMinutos(saldo, plan))
+          setSmsBalance(cr.sms_disponibles ?? 0)
         }
 
         if (tx) {
@@ -795,9 +807,11 @@ export default function Settings() {
         <h2 className="text-base font-semibold theme-text-primary">Mis Créditos</h2>
         <p className="mt-1 text-xs theme-text-muted">Balance y últimas transacciones.</p>
         <div className="mt-4 flex gap-4">
-          <div className="rounded-xl border theme-border/80 theme-bg-base px-4 py-3">
-            <div className="text-xs theme-text-muted">Minutos de voz</div>
-            <div className="text-xl font-semibold theme-text-primary">{voiceMinutes}</div>
+          <div className="rounded-xl border theme-border/80 theme-bg-base px-4 py-3 min-w-0">
+            <div className="text-xs theme-text-muted">Saldo de créditos</div>
+            <div className="text-xl font-semibold theme-text-primary break-words leading-snug">
+              {creditoSaldoLinea}
+            </div>
           </div>
           <div className="rounded-xl border theme-border/80 theme-bg-base px-4 py-3">
             <div className="text-xs theme-text-muted">SMS</div>

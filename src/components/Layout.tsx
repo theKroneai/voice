@@ -3,15 +3,15 @@ import { Link, Outlet, useNavigate } from 'react-router-dom'
 import type { User } from '@supabase/supabase-js'
 import { LogOut } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { calcularMinutosEstimados, smsEstimadosDesdeSaldo } from '../lib/creditUsd'
 import { Sidebar } from './Sidebar'
 import { ThemeToggle } from './ThemeToggle'
-
-const SALDO_BAJO_MINUTOS = 7
 
 export function Layout() {
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(null)
-  const [voiceMinutes, setVoiceMinutes] = useState<number | null>(null)
+  const [saldoUsd, setSaldoUsd] = useState<number | null>(null)
+  const [planVoz, setPlanVoz] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -34,22 +34,32 @@ export function Layout() {
 
   useEffect(() => {
     if (!user?.id) {
-      setVoiceMinutes(null)
+      setSaldoUsd(null)
+      setPlanVoz(null)
       return
     }
     let mounted = true
     supabase
       .from('credits')
-      .select('minutos_voz')
+      .select('saldo_usd, plan_voz')
       .eq('user_id', user.id)
       .maybeSingle()
       .then(({ data, error }) => {
         if (!mounted) return
         if (error) {
-          setVoiceMinutes(0)
+          setSaldoUsd(0)
+          setPlanVoz(null)
           return
         }
-        setVoiceMinutes(typeof data?.minutos_voz === 'number' ? data.minutos_voz : 0)
+        const raw = data?.saldo_usd
+        const saldo =
+          raw != null && Number.isFinite(Number(raw))
+            ? Math.max(0, Number(raw))
+            : 0
+        setSaldoUsd(saldo)
+        setPlanVoz(
+          data?.plan_voz != null ? String(data.plan_voz) : 'prospectador',
+        )
       })
     return () => {
       mounted = false
@@ -57,8 +67,24 @@ export function Layout() {
   }, [user?.id])
 
   const email = useMemo(() => user?.email ?? '', [user])
-  const saldoBajo = voiceMinutes !== null && voiceMinutes < SALDO_BAJO_MINUTOS
-  const approxCalls = voiceMinutes !== null ? Math.floor(voiceMinutes / 2) : 0
+  const minEstimados =
+    saldoUsd != null && planVoz
+      ? calcularMinutosEstimados(saldoUsd, planVoz)
+      : 0
+  const smsEstimados =
+    saldoUsd != null ? smsEstimadosDesdeSaldo(saldoUsd) : 0
+  const saldoColorClass =
+    saldoUsd == null
+      ? 'theme-bg-elevated theme-text-secondary theme-border'
+      : saldoUsd < 5
+        ? 'border-red-500/50 bg-red-500/10 text-red-200 ring-red-500/30'
+        : saldoUsd <= 20
+          ? 'border-amber-500/50 bg-amber-500/10 text-amber-100 ring-amber-500/30'
+          : 'border-[#22c55e]/45 bg-[#22c55e]/10 text-[#86efac] ring-[#22c55e]/30'
+  const tooltipSaldo =
+    saldoUsd != null
+      ? `$${saldoUsd.toFixed(2)} disponibles\n~${minEstimados} min de llamadas en tu plan\n~${smsEstimados} SMS disponibles\nRecargar →`
+      : ''
 
   async function onSignOut() {
     await supabase.auth.signOut()
@@ -84,19 +110,17 @@ export function Layout() {
             </div>
 
             <div className="flex items-center gap-3">
-              {voiceMinutes !== null && (
+              {saldoUsd !== null && (
                 <Link
                   to="/credits"
-                  title={`${voiceMinutes.toFixed(0)} minutos disponibles. Equivale a ~${approxCalls} llamadas de 2 min. Recargar →`}
-                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium ring-1 transition hover:opacity-90 ${
-                    saldoBajo
-                      ? 'border-red-500/50 bg-red-500/10 text-red-200 ring-red-500/30'
-                      : 'theme-bg-elevated theme-text-secondary theme-border'
-                  }`}
+                  title={tooltipSaldo}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium ring-1 transition hover:opacity-90 ${saldoColorClass}`}
                 >
-                  <span aria-hidden>🎙️</span>
-                  <span>{voiceMinutes.toFixed(0)} min</span>
-                  {saldoBajo && (
+                  <span aria-hidden>💳</span>
+                  <span className="tabular-nums font-semibold">
+                    ${saldoUsd.toFixed(2)}
+                  </span>
+                  {saldoUsd < 5 && (
                     <span className="ml-1 text-[10px] font-semibold uppercase text-red-300">
                       Saldo bajo
                     </span>

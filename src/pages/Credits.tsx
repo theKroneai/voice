@@ -1,9 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { BadgeCheck, Loader2, MessageSquare, Phone } from 'lucide-react'
+import { BadgeCheck, Loader2, Phone } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity, logError } from '../lib/activityLogger'
 import { getPublicWebhookBaseUrl } from '../lib/getPublicWebhookBaseUrl'
+import {
+  SMS_USD_POR_MENSAJE,
+  calcularMinutosEstimados,
+  smsEstimadosDesdeSaldo,
+} from '../lib/creditUsd'
 
 type Plan = 'BASICO' | 'PRO' | 'PREMIUM'
 
@@ -15,9 +20,12 @@ const MONTOS_POR_PLAN: Record<string, number[]> = {
   cazador: [100, 200, 500, 1000],
 }
 const RECARGA_TEXTO_POR_PLAN: Record<string, string> = {
-  prospectador: 'Recarga mínima $20 — Solo voz outbound',
-  vendedor: 'Recarga mínima $50 — Incluye voz outbound + inbound',
-  cazador: 'Recarga mínima $100 — Incluye voz + SMS automático',
+  prospectador:
+    'Recarga mínima $20 — Úsalos en llamadas,\nSMS o cualquier servicio Krone',
+  vendedor:
+    'Recarga mínima $50 — Créditos para llamadas\noutbound, inbound y SMS',
+  cazador:
+    'Recarga mínima $100 — Créditos universales\npara todos los servicios Krone AI',
 }
 const PLAN_NOMBRE_PARA_ERROR: Record<string, string> = {
   prospectador: 'Prospectador',
@@ -68,6 +76,43 @@ type CreditTransaction = {
   call_id: string | null
 }
 
+function categoríaTransacciónCrédito(t: CreditTransaction): {
+  emoji: string
+  label: string
+} {
+  const tipo = (t.tipo ?? '').toLowerCase()
+  const desc = (t.descripcion ?? '').toLowerCase()
+  if (
+    tipo.includes('recarga') ||
+    desc.includes('recarga') ||
+    desc.includes('stripe')
+  ) {
+    return { emoji: '💳', label: 'Recarga' }
+  }
+  if (
+    tipo.includes('referido') ||
+    desc.includes('referido') ||
+    desc.includes('comisión')
+  ) {
+    return { emoji: '🤝', label: 'Referido' }
+  }
+  if (tipo.includes('sms') || desc.includes('sms')) {
+    return { emoji: '💬', label: 'SMS' }
+  }
+  if (
+    tipo.includes('llamada') ||
+    desc.includes('llamada') ||
+    desc.includes('call') ||
+    (t.call_id != null && String(t.call_id).length > 0)
+  ) {
+    return { emoji: '📞', label: 'Llamada' }
+  }
+  return {
+    emoji: '📋',
+    label: (t.tipo ?? 'Movimiento').trim() || 'Movimiento',
+  }
+}
+
 const PLAN_LABEL: Record<Plan, string> = {
   BASICO: 'Básico',
   PRO: 'Pro',
@@ -116,6 +161,7 @@ export default function Credits() {
   const [currentPlan, setCurrentPlan] = useState<Plan>('PRO')
   const [voiceMinutes, setVoiceMinutes] = useState<number>(0)
   const [smsBalance, setSmsBalance] = useState<number>(0)
+  const [saldoUsd, setSaldoUsd] = useState<number>(0)
   const [saldoReferidosUsd, setSaldoReferidosUsd] = useState<number>(0)
 
   const [transactions, setTransactions] = useState<CreditTransaction[]>([])
@@ -148,6 +194,15 @@ export default function Credits() {
   )
 
   const planIdForCheckout = useMemo(() => PLAN_TO_STRIPE[currentPlan], [currentPlan])
+
+  const minutosSaldoEstimados = useMemo(
+    () => calcularMinutosEstimados(saldoUsd, planIdForCheckout),
+    [saldoUsd, planIdForCheckout],
+  )
+  const smsDesdeSaldoUsd = useMemo(
+    () => smsEstimadosDesdeSaldo(saldoUsd),
+    [saldoUsd],
+  )
   const montosDisponibles = useMemo(
     () => MONTOS_POR_PLAN[planIdForCheckout] ?? MONTOS_POR_PLAN.prospectador,
     [planIdForCheckout],
@@ -174,7 +229,14 @@ export default function Credits() {
         const tipo = (t.tipo ?? '').toLowerCase()
         const desc = (t.descripcion ?? '').toLowerCase()
         if (transactionFilter === 'recarga') return tipo.includes('recarga') || desc.includes('recarga') || desc.includes('stripe')
-        if (transactionFilter === 'uso') return tipo.includes('uso') || tipo.includes('llamada') || desc.includes('llamada')
+        if (transactionFilter === 'uso')
+          return (
+            tipo.includes('uso') ||
+            tipo.includes('llamada') ||
+            desc.includes('llamada') ||
+            tipo.includes('sms') ||
+            desc.includes('sms')
+          )
         if (transactionFilter === 'referido') return tipo.includes('referido') || desc.includes('comisión') || desc.includes('referido')
         return true
       })
@@ -237,16 +299,24 @@ export default function Credits() {
 
       const { data: profile, error: creditsError } = await supabase
         .from('credits')
-        .select('plan_voz, minutos_voz, sms_disponibles, saldo_referidos_usd')
+        .select(
+          'plan_voz, minutos_voz, sms_disponibles, saldo_referidos_usd, saldo_usd',
+        )
         .eq('user_id', userId)
         .maybeSingle()
 
       if (creditsError) return
       if (profile) {
-        const planVoz = profile.plan_voz as string | null
+        const planVoz = (profile.plan_voz as string | null) ?? 'prospectador'
         if (planVoz === 'prospectador') setCurrentPlan('BASICO')
         else if (planVoz === 'vendedor') setCurrentPlan('PRO')
         else if (planVoz === 'cazador') setCurrentPlan('PREMIUM')
+        const rawSaldo = profile.saldo_usd
+        const saldo =
+          rawSaldo != null && Number.isFinite(Number(rawSaldo))
+            ? Math.max(0, Number(rawSaldo))
+            : 0
+        setSaldoUsd(saldo)
         if (typeof profile.minutos_voz === 'number') {
           setVoiceMinutes(profile.minutos_voz)
         }
@@ -354,9 +424,9 @@ export default function Credits() {
     setSelectingPlanId(planId)
     try {
       const planVoz = planId
-      const { data: existing } = await supabase
+        const { data: existing } = await supabase
         .from('credits')
-        .select('minutos_voz, sms_disponibles, saldo_referidos_usd')
+        .select('minutos_voz, sms_disponibles, saldo_referidos_usd, saldo_usd')
         .eq('user_id', userId)
         .maybeSingle()
 
@@ -376,6 +446,7 @@ export default function Credits() {
           minutos_voz: 0,
           sms_disponibles: 0,
           saldo_referidos_usd: 0,
+          saldo_usd: 0,
         })
         if (error) {
           setPlanError(error.message)
@@ -454,7 +525,7 @@ export default function Credits() {
             Créditos
           </h1>
           <p className="mt-1 text-sm theme-text-muted">
-            Consulta tu balance actual y paquetes disponibles.
+            Tus créditos se pueden usar en cualquier servicio de Krone AI.
           </p>
         </div>
 
@@ -479,14 +550,17 @@ export default function Credits() {
         </div>
       )}
 
-      {/* Balance actual */}
+      {/* Balance actual — saldo universal USD */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-          <div className="flex items-center justify-between gap-3">
+        <div className="rounded-2xl border theme-border/80 theme-bg-card p-5 md:col-span-2">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold theme-text-primary">Voz</div>
+              <div className="text-sm font-semibold theme-text-primary">
+                Saldo de créditos (USD)
+              </div>
               <div className="mt-1 text-xs theme-text-muted">
-                Minutos disponibles para llamadas IA.
+                Un solo saldo para voz, SMS y próximos servicios. Los minutos y SMS son estimados
+                según tu plan.
               </div>
             </div>
             <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#22c55e]/15 text-[#22c55e] ring-1 ring-[#22c55e]/25">
@@ -494,37 +568,77 @@ export default function Credits() {
             </div>
           </div>
           <div className="mt-4 flex items-baseline gap-2">
-            <div className="text-3xl font-semibold tracking-tight theme-text-primary">
-              {voiceMinutes.toFixed(0)}
+            <div className="text-3xl font-semibold tracking-tight text-[#22c55e]">
+              ${saldoUsd.toFixed(2)}
             </div>
-            <div className="text-sm theme-text-muted">min</div>
+            <div className="text-sm theme-text-muted">USD</div>
           </div>
-          <div className="mt-2 text-xs theme-text-muted">
-            Plan: <span className="theme-text-secondary">{currentPlanLabel}</span> ·{' '}
-            Costo: <span className="theme-text-secondary">${currentPlanRate.toFixed(2)}/min</span>
-          </div>
+          <p className="mt-3 text-sm theme-text-secondary">
+            ${saldoUsd.toFixed(2)} ≈ {minutosSaldoEstimados} min de llamadas en tu plan (
+            {currentPlanLabel})
+          </p>
+          <p className="mt-1 text-sm theme-text-muted">
+            o ≈ {smsDesdeSaldoUsd} SMS a ${SMS_USD_POR_MENSAJE.toFixed(2)}/mensaje
+          </p>
         </div>
+      </div>
 
-        <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold theme-text-primary">SMS</div>
-              <div className="mt-1 text-xs theme-text-muted">
-                Mensajes disponibles para notificaciones.
-              </div>
-            </div>
-            <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-400/15 text-sky-300 ring-1 ring-sky-300/25">
-              <MessageSquare className="h-5 w-5" />
-            </div>
+      {/* ¿En qué puedes usar tus créditos? */}
+      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
+        <h2 className="text-base font-semibold theme-text-primary">
+          ¿En qué puedes usar tus créditos?
+        </h2>
+        <p className="mt-1 text-xs theme-text-muted">
+          Precios de referencia; el consumo real se descuenta de tu saldo en USD.
+        </p>
+        <div className="mt-4 divide-y divide-zinc-800/80 rounded-xl border border-zinc-800/80 bg-[#0b0b0b]/60 overflow-hidden text-sm">
+          <div className="px-4 py-3">
+            <div className="font-medium theme-text-primary">🎙️ Llamadas de voz (outbound)</div>
+            <ul className="mt-2 space-y-1 text-xs theme-text-muted">
+              <li>Prospectador — $0.45/min</li>
+              <li>Vendedor — $0.75/min</li>
+              <li>Cazador — $0.90/min</li>
+            </ul>
           </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <div className="text-3xl font-semibold tracking-tight theme-text-primary">
-              {smsBalance.toFixed(0)}
-            </div>
-            <div className="text-sm theme-text-muted">SMS</div>
+          <div className="px-4 py-3">
+            <div className="font-medium theme-text-primary">📞 Llamadas de voz (inbound)</div>
+            <ul className="mt-2 space-y-1 text-xs theme-text-muted">
+              <li>Vendedor — $0.75/min</li>
+              <li>Cazador — $0.90/min</li>
+            </ul>
           </div>
-          <div className="mt-2 text-xs theme-text-muted">
-            El saldo se descuenta automáticamente a <span className="theme-text-secondary">${smsPrice.toFixed(2)}/mensaje</span> por cada SMS enviado.
+          <div className="px-4 py-3">
+            <div className="font-medium theme-text-primary">💬 SMS automático</div>
+            <p className="mt-2 text-xs theme-text-muted">
+              Todos los planes — $0.05/mensaje
+            </p>
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium theme-text-primary">🎨 Generación de imágenes</span>
+              <span className="rounded-full bg-zinc-700/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                Próximamente
+              </span>
+            </div>
+            <p className="mt-2 text-xs theme-text-muted">$0.10 por imagen (Krone Media)</p>
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium theme-text-primary">🎬 Generación de video</span>
+              <span className="rounded-full bg-zinc-700/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                Próximamente
+              </span>
+            </div>
+            <p className="mt-2 text-xs theme-text-muted">Por video corto — $0.50</p>
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium theme-text-primary">🤖 Chatbot web</span>
+              <span className="rounded-full bg-zinc-700/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                Próximamente
+              </span>
+            </div>
+            <p className="mt-2 text-xs theme-text-muted">Krone Chat — $0.02 por conversación</p>
           </div>
         </div>
       </div>
@@ -648,14 +762,16 @@ export default function Credits() {
         </div>
       </div>
 
-      {/* Recarga rápida — VOZ (Stripe) */}
+      {/* Recarga rápida (Stripe) */}
       <div className="rounded-2xl border theme-border/80 theme-bg-card p-5 space-y-4">
         <div>
           <div className="text-sm font-semibold theme-text-primary">
-            Recargar Créditos — VOZ
+            Recargar Créditos
           </div>
           <div className="text-xs theme-text-muted">
-            Plan actual: {currentPlanLabel} · ${currentPlanRate.toFixed(2)}/min · Pay per use
+            Tus créditos se pueden usar en cualquier servicio de Krone AI. Plan actual:{' '}
+            {currentPlanLabel} · ~${currentPlanRate.toFixed(2)}/min voz outbound en tu plan · Pay
+            per use
           </div>
         </div>
 
@@ -739,7 +855,7 @@ export default function Credits() {
           </div>
         </div>
 
-        <p className="text-xs theme-text-muted">
+        <p className="text-xs theme-text-muted whitespace-pre-line">
           {RECARGA_TEXTO_POR_PLAN[planIdForCheckout] ?? RECARGA_TEXTO_POR_PLAN.prospectador}
         </p>
 
@@ -762,7 +878,7 @@ export default function Credits() {
           <div>
             <div className="text-sm font-semibold theme-text-primary">SMS Outbound</div>
             <div className="text-xs theme-text-muted">
-              Paga solo por los mensajes que envías. El saldo se descuenta automáticamente a ${smsPrice.toFixed(2)} por mensaje, igual que los minutos de voz.
+              Paga solo por los mensajes que envías. Cada SMS descuenta ${smsPrice.toFixed(2)} de tu saldo universal en USD.
             </div>
           </div>
         </div>
@@ -833,45 +949,53 @@ export default function Credits() {
               <thead className="text-xs uppercase tracking-wide theme-text-muted">
                 <tr className="border-b theme-border/80">
                   <th className="px-4 py-3 font-medium">Fecha</th>
-                  <th className="px-4 py-3 font-medium">Descripción</th>
-                  <th className="px-4 py-3 font-medium">Monto</th>
-                  <th className="px-4 py-3 font-medium">Minutos</th>
-                  <th className="px-4 py-3 font-medium">Tipo</th>
+                  <th className="px-4 py-3 font-medium">Categoría</th>
+                  <th className="px-4 py-3 font-medium">Monto USD</th>
+                  <th className="px-4 py-3 font-medium">Detalle</th>
                 </tr>
               </thead>
               <tbody>
                 {loadingTransactions ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center theme-text-muted">
+                    <td colSpan={4} className="px-4 py-8 text-center theme-text-muted">
                       Cargando transacciones...
                     </td>
                   </tr>
                 ) : filteredTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-4 py-8 text-center theme-text-muted">
+                    <td colSpan={4} className="px-4 py-8 text-center theme-text-muted">
                       No hay transacciones aún
                     </td>
                   </tr>
                 ) : (
                   filteredTransactions.map((t) => {
-                    const tipoLower = (t.tipo ?? '').toLowerCase()
-                    const descLower = (t.descripcion ?? '').toLowerCase()
-                    const isRecarga = tipoLower.includes('recarga') || descLower.includes('recarga') || descLower.includes('stripe')
-                    const isReferido = tipoLower.includes('referido') || descLower.includes('comisión') || descLower.includes('referido')
-                    const tipoLabel = isRecarga ? '💳 Recarga' : isReferido ? '🤝 Referido' : '📞 Uso'
-                    const minStr = t.minutos != null ? (t.minutos >= 0 ? `+${t.minutos.toFixed(1)}` : `${t.minutos.toFixed(1)}`) : '—'
-                    const montoStr = t.monto_usd != null ? (t.monto_usd >= 0 ? `+$${t.monto_usd.toFixed(2)}` : `-$${Math.abs(t.monto_usd).toFixed(2)}`) : '—'
+                    const cat = categoríaTransacciónCrédito(t)
+                    const montoStr =
+                      t.monto_usd != null
+                        ? t.monto_usd >= 0
+                          ? `+$${t.monto_usd.toFixed(2)}`
+                          : `-$${Math.abs(t.monto_usd).toFixed(2)}`
+                        : '—'
                     return (
                       <tr key={t.id} className="border-b theme-border/80 last:border-b-0">
                         <td className="px-4 py-3 theme-text-secondary">
-                          {new Date(t.created_at).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })}
+                          {new Date(t.created_at).toLocaleDateString('es-ES', {
+                            day: 'numeric',
+                            month: 'short',
+                          })}
                         </td>
                         <td className="px-4 py-3 theme-text-secondary">
+                          <span className="inline-flex items-center gap-1.5">
+                            <span>{cat.emoji}</span>
+                            <span>{cat.label}</span>
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 theme-text-secondary tabular-nums">
+                          {montoStr}
+                        </td>
+                        <td className="px-4 py-3 text-xs theme-text-muted max-w-[220px]">
                           {t.descripcion ?? '—'}
                         </td>
-                        <td className="px-4 py-3 theme-text-secondary">{montoStr}</td>
-                        <td className="px-4 py-3 theme-text-secondary">{minStr}</td>
-                        <td className="px-4 py-3 theme-text-secondary">{tipoLabel}</td>
                       </tr>
                     )
                   })
