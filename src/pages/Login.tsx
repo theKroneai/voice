@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { logActivity } from '../lib/activityLogger'
 import { ensureUserRow, isOnboardingDone } from '../lib/onboardingGate'
 import { emailBienvenida, enviarCorreo } from '../lib/emails'
+import { publicLegalPath } from '../lib/publicSiteUrl'
 import { KRONE_BRAND_ICON } from '../utils/logos'
 
 function welcomeDisplayName(user: { email?: string | null; user_metadata?: { full_name?: string } }) {
@@ -207,18 +208,21 @@ export default function Login() {
 
   async function handleGoogleLogin() {
     setError(null)
-    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo:
+          window.location.hostname === 'localhost'
+            ? 'http://localhost:5175/dashboard'
+            : 'https://voice.thekroneai.com/dashboard',
       },
     })
-    if (oauthError) {
+    if (error) {
       setError('Error al conectar con Google')
       void logActivity({
         accion: 'oauth_google_fallido',
         categoria: 'auth',
-        detalle: { error: oauthError.message },
+        detalle: { error: error.message },
       })
     }
   }
@@ -426,11 +430,11 @@ export default function Login() {
               }}
             >
               Al registrarte aceptas nuestra{' '}
-              <a href="/privacy-policy" style={{ color: '#22c55e' }}>
+              <a href={publicLegalPath('/privacy-policy')} style={{ color: '#22c55e' }}>
                 Política de Privacidad
               </a>{' '}
               y{' '}
-              <a href="/terms" style={{ color: '#22c55e' }}>
+              <a href={publicLegalPath('/terms')} style={{ color: '#22c55e' }}>
                 Términos de Servicio
               </a>
             </p>

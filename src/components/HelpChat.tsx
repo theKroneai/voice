@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../lib/activityLogger'
 import { emailTicketCreado, enviarCorreo } from '../lib/emails'
+import { PUBLIC_SITE_ORIGIN } from '../lib/publicSiteUrl'
 import { KRONE_BRAND_ICON } from '../utils/logos'
 
 const WELCOME_TEXT =
@@ -201,7 +202,7 @@ export function HelpChat() {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://voice.thekroneai.com',
+          'HTTP-Referer': PUBLIC_SITE_ORIGIN,
           'X-Title': 'Krone Agent AI',
         },
         body: JSON.stringify({

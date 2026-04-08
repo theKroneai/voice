@@ -4,6 +4,7 @@ import { Menu, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { KRONE_BRAND_ICON } from '../utils/logos'
 import { getPublicWebhookBaseUrl } from '../lib/getPublicWebhookBaseUrl'
+import { publicLegalPath } from '../lib/publicSiteUrl'
 
 type PlanConfigLanding = {
   plan_id: string
@@ -1247,15 +1248,15 @@ Reglas:
             }}
           >
             <a
-              href="/privacy-policy"
+              href={publicLegalPath('/privacy-policy')}
               style={{ color: '#555', fontSize: 13, textDecoration: 'none' }}
             >
               Política de Privacidad
             </a>
-            <a href="/terms" style={{ color: '#555', fontSize: 13, textDecoration: 'none' }}>
+            <a href={publicLegalPath('/terms')} style={{ color: '#555', fontSize: 13, textDecoration: 'none' }}>
               Términos de Servicio
             </a>
-            <a href="/compliance" style={{ color: '#555', fontSize: 13, textDecoration: 'none' }}>
+            <a href={publicLegalPath('/compliance')} style={{ color: '#555', fontSize: 13, textDecoration: 'none' }}>
               Compliance / Habeas Data
             </a>
             <a

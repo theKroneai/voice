@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { PUBLIC_SITE_ORIGIN } from '../lib/publicSiteUrl'
 
 export default function PrivacyPolicy() {
   return (
@@ -173,12 +174,12 @@ export default function PrivacyPolicy() {
           <p className="mt-2">
             Sitio:{' '}
             <a
-              href="https://voice.thekroneai.com"
+              href={PUBLIC_SITE_ORIGIN}
               target="_blank"
               rel="noopener noreferrer"
               className="font-medium text-[#22c55e] hover:underline"
             >
-              voice.thekroneai.com
+              thekroneai.com
             </a>
           </p>
         </div>
