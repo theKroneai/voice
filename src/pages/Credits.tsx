@@ -12,6 +12,13 @@ import { emailRecargaExitosa, enviarCorreo } from '../lib/emails'
 
 type Plan = 'BASICO' | 'PRO' | 'PREMIUM'
 
+function isCreateCheckoutEdgeConfigured(): boolean {
+  return Boolean(
+    String(import.meta.env.VITE_SUPABASE_URL ?? '').trim() &&
+      String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').trim(),
+  )
+}
+
 const TIERS_MONTOS_POR_PLAN: Record<string, number[]> = {
   prospectador: [20, 50, 100, 200],
   vendedor: [50, 100, 200, 500],
@@ -196,6 +203,7 @@ export default function Credits() {
   const recargaExitosaEmailSentRef = useRef(false)
   const [cancelledBanner, setCancelledBanner] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState<number | null>(null)
+  const [montoSeleccionado, setMontoSeleccionado] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('')
   const [transactionFilter, setTransactionFilter] = useState<'all' | 'recarga' | 'uso' | 'referido'>('all')
   const [selectingPlanId, setSelectingPlanId] = useState<string | null>(null)
@@ -231,6 +239,19 @@ export default function Credits() {
     const filtered = tiers.filter((x) => x >= minimoDelPlan)
     return filtered.length > 0 ? filtered : [minimoDelPlan]
   }, [planIdForCheckout, minimoDelPlan])
+
+  const customPagarEnabled = useMemo(() => {
+    const t = customAmount.trim()
+    if (!t) return false
+    const n = Number(t)
+    return Number.isFinite(n) && n >= minimoDelPlan
+  }, [customAmount, minimoDelPlan])
+
+  useEffect(() => {
+    if (montoSeleccionado != null && montoSeleccionado < minimoDelPlan) {
+      setMontoSeleccionado(null)
+    }
+  }, [minimoDelPlan, montoSeleccionado])
 
   function minutesForAmount(amountUsd: number, applyVolumeBonus: boolean): number {
     let min = amountUsd / currentPlanRate
@@ -431,41 +452,67 @@ export default function Credits() {
   }
 
   async function startCheckout(amountUsd: number) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    const user = session?.user
+
+    console.log('=== INICIO CHECKOUT ===')
+    console.log('plan:', planIdForCheckout)
+    console.log('monto:', amountUsd)
+    console.log('user:', user?.id)
+    console.log('SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL)
+
     setRecargaError(null)
     if (amountUsd < minimoDelPlan) {
       const planNombre = PLAN_NOMBRE_PARA_ERROR[planIdForCheckout] ?? 'Prospectador'
       setRecargaError(`El plan ${planNombre} requiere una recarga mínima de $${minimoDelPlan}`)
       return
     }
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
     const userId = session?.user?.id
-    if (!userId || !import.meta.env.VITE_N8N_URL) {
+    if (!userId || !isCreateCheckoutEdgeConfigured()) {
       setCheckoutLoading(null)
       return
     }
     setCheckoutLoading(amountUsd)
     try {
-      const webhookUrl = `${import.meta.env.VITE_N8N_URL}/webhook/create-checkout`
-      const res = await fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: userId,
-          amount: amountUsd,
-          plan: planIdForCheckout,
-        }),
-      })
-      const json = await res.json().catch(() => ({}))
-      const url = json.checkout_url
-      if (url) {
+      const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? '').replace(/\/$/, '')
+      const amount = amountUsd
+      const plan = planIdForCheckout
+      const user_id = userId
+
+      if (!amountUsd || amountUsd <= 0) {
+        console.error('Monto inválido:', amountUsd)
+        setCheckoutLoading(null)
+        return
+      }
+
+      console.log('=== CHECKOUT DEBUG ===')
+      console.log('amountUsd:', amountUsd)
+      console.log('plan:', planIdForCheckout)
+      console.log('userId:', userId)
+      console.log('supabaseUrl:', import.meta.env.VITE_SUPABASE_URL)
+
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/create-checkout`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({ amount, plan, user_id }),
+        },
+      )
+
+      const data = await response.json()
+      if (data.checkout_url) {
         void logActivity({
           accion: 'recarga_iniciada',
           categoria: 'pago',
           detalle: { monto: amountUsd, plan: planIdForCheckout },
         })
-        window.location.href = url
+        window.location.href = data.checkout_url
         return
       }
     } catch {
@@ -684,66 +731,6 @@ export default function Credits() {
         </div>
       </div>
 
-      {/* ¿En qué puedes usar tus créditos? */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
-        <h2 className="text-base font-semibold theme-text-primary">
-          ¿En qué puedes usar tus créditos?
-        </h2>
-        <p className="mt-1 text-xs theme-text-muted">
-          Precios de referencia; el consumo real se descuenta de tu saldo en USD.
-        </p>
-        <div className="mt-4 divide-y divide-zinc-800/80 rounded-xl border border-zinc-800/80 bg-[#0b0b0b]/60 overflow-hidden text-sm">
-          <div className="px-4 py-3">
-            <div className="font-medium theme-text-primary">🎙️ Llamadas de voz (outbound)</div>
-            <ul className="mt-2 space-y-1 text-xs theme-text-muted">
-              <li>Prospectador — $0.45/min</li>
-              <li>Vendedor — $0.75/min</li>
-              <li>Cazador — $0.90/min</li>
-            </ul>
-          </div>
-          <div className="px-4 py-3">
-            <div className="font-medium theme-text-primary">📞 Llamadas de voz (inbound)</div>
-            <ul className="mt-2 space-y-1 text-xs theme-text-muted">
-              <li>Vendedor — $0.75/min</li>
-              <li>Cazador — $0.90/min</li>
-            </ul>
-          </div>
-          <div className="px-4 py-3">
-            <div className="font-medium theme-text-primary">💬 SMS automático</div>
-            <p className="mt-2 text-xs theme-text-muted">
-              Todos los planes — $0.08/mensaje
-            </p>
-          </div>
-          <div className="px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium theme-text-primary">🎨 Generación de imágenes</span>
-              <span className="rounded-full bg-zinc-700/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
-                Próximamente
-              </span>
-            </div>
-            <p className="mt-2 text-xs theme-text-muted">$0.10 por imagen (Krone Media)</p>
-          </div>
-          <div className="px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium theme-text-primary">🎬 Generación de video</span>
-              <span className="rounded-full bg-zinc-700/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
-                Próximamente
-              </span>
-            </div>
-            <p className="mt-2 text-xs theme-text-muted">Por video corto — $0.50</p>
-          </div>
-          <div className="px-4 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-medium theme-text-primary">🤖 Chatbot web</span>
-              <span className="rounded-full bg-zinc-700/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
-                Próximamente
-              </span>
-            </div>
-            <p className="mt-2 text-xs theme-text-muted">Krone Chat — $0.02 por conversación</p>
-          </div>
-        </div>
-      </div>
-
       {/* Saldo de Referidos */}
       <div className="rounded-2xl border border-[#22c55e]/30 theme-bg-card p-5 bg-[#22c55e]/5">
         <div className="text-sm font-semibold theme-text-primary">💰 Saldo de Referidos</div>
@@ -886,13 +873,27 @@ export default function Credits() {
             const hasBonus = amount >= 200
             const loading = checkoutLoading === amount
             const mensaje = MENSAJES_MOTIVADORES[amount] ?? ''
+            const isSelected = montoSeleccionado === amount
             return (
               <button
                 key={amount}
                 type="button"
-                disabled={!!checkoutLoading || !import.meta.env.VITE_N8N_URL}
-                onClick={() => startCheckout(amount)}
-                className="relative flex flex-col items-center justify-center rounded-xl border theme-border bg-[#0b0b0b]/80 px-4 py-5 text-center hover:border-[#22c55e]/50 hover:bg-[#22c55e]/10 transition disabled:opacity-60 disabled:cursor-not-allowed min-h-[120px]"
+                disabled={!!checkoutLoading || !isCreateCheckoutEdgeConfigured()}
+                onClick={() => {
+                  if (montoSeleccionado === amount) {
+                    void startCheckout(amount)
+                  } else {
+                    setMontoSeleccionado(amount)
+                    setCustomAmount('')
+                    setRecargaError(null)
+                  }
+                }}
+                className="relative flex flex-col items-center justify-center rounded-xl px-4 py-5 text-center transition duration-150 disabled:opacity-60 disabled:cursor-not-allowed min-h-[120px]"
+                style={{
+                  border: isSelected ? '2px solid #22c55e' : '1px solid #1f1f1f',
+                  background: isSelected ? '#0f2010' : '#111111',
+                  transform: isSelected ? 'scale(1.02)' : undefined,
+                }}
               >
                 {hasBonus && (
                   <span className="absolute -top-1.5 right-1.5 rounded bg-[#22c55e] px-1.5 py-0.5 text-[10px] font-semibold text-[#0b0b0b]">
@@ -918,6 +919,21 @@ export default function Credits() {
           })}
         </div>
 
+        {montoSeleccionado != null ? (
+          <button
+            type="button"
+            disabled={!!checkoutLoading || !isCreateCheckoutEdgeConfigured()}
+            onClick={() => void startCheckout(montoSeleccionado)}
+            className="w-full rounded-lg bg-[#22c55e] px-4 py-3 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+          >
+            {checkoutLoading === montoSeleccionado ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>Pagar ${montoSeleccionado} →</>
+            )}
+          </button>
+        ) : null}
+
         <div className="rounded-xl border theme-border bg-[#0b0b0b]/80 px-4 py-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <span className="text-sm font-semibold theme-text-primary sm:min-w-[100px]">Otro monto</span>
           <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -929,21 +945,22 @@ export default function Credits() {
               onChange={(e) => {
                 setCustomAmount(e.target.value)
                 setRecargaError(null)
+                setMontoSeleccionado(null)
               }}
               placeholder="Ingresa el monto"
               className="flex-1 min-w-0 rounded-lg border theme-border theme-bg-base px-3 py-2.5 text-sm theme-text-primary placeholder:theme-text-dim"
             />
             <button
               type="button"
-              disabled={!!checkoutLoading || !import.meta.env.VITE_N8N_URL || !customAmount}
+              disabled={!!checkoutLoading || !isCreateCheckoutEdgeConfigured() || !customPagarEnabled}
               onClick={() => {
                 const n = Number(customAmount)
                 setRecargaError(null)
-                if (n < minimoDelPlan) {
+                if (!Number.isFinite(n) || n < minimoDelPlan) {
                   setRecargaError(`Mínimo $${minimoDelPlan} para tu plan`)
                   return
                 }
-                startCheckout(n)
+                void startCheckout(n)
               }}
               className="rounded-lg bg-[#22c55e] px-4 py-2.5 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] disabled:opacity-50 inline-flex items-center justify-center gap-2"
             >
@@ -969,9 +986,10 @@ export default function Credits() {
           </div>
         )}
 
-        {!import.meta.env.VITE_N8N_URL && (
+        {!isCreateCheckoutEdgeConfigured() && (
           <p className="text-xs text-amber-200">
-            Configura `VITE_N8N_URL` en el entorno del frontend para habilitar recargas con Stripe (webhook create-checkout en n8n).
+            Configura `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` para habilitar recargas (Edge Function{' '}
+            <code className="rounded bg-zinc-800 px-1">create-checkout</code>).
           </p>
         )}
       </div>
@@ -1121,6 +1139,66 @@ export default function Credits() {
               {transactionsError}
             </div>
           ) : null}
+        </div>
+      </div>
+
+      {/* ¿En qué puedes usar tus créditos? */}
+      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5">
+        <h2 className="text-base font-semibold theme-text-primary">
+          ¿En qué puedes usar tus créditos?
+        </h2>
+        <p className="mt-1 text-xs theme-text-muted">
+          Precios de referencia; el consumo real se descuenta de tu saldo en USD.
+        </p>
+        <div className="mt-4 divide-y divide-zinc-800/80 rounded-xl border border-zinc-800/80 bg-[#0b0b0b]/60 overflow-hidden text-sm">
+          <div className="px-4 py-3">
+            <div className="font-medium theme-text-primary">🎙️ Llamadas de voz (outbound)</div>
+            <ul className="mt-2 space-y-1 text-xs theme-text-muted">
+              <li>Prospectador — $0.45/min</li>
+              <li>Vendedor — $0.75/min</li>
+              <li>Cazador — $0.90/min</li>
+            </ul>
+          </div>
+          <div className="px-4 py-3">
+            <div className="font-medium theme-text-primary">📞 Llamadas de voz (inbound)</div>
+            <ul className="mt-2 space-y-1 text-xs theme-text-muted">
+              <li>Vendedor — $0.75/min</li>
+              <li>Cazador — $0.90/min</li>
+            </ul>
+          </div>
+          <div className="px-4 py-3">
+            <div className="font-medium theme-text-primary">💬 SMS automático</div>
+            <p className="mt-2 text-xs theme-text-muted">
+              Todos los planes — $0.08/mensaje
+            </p>
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium theme-text-primary">🎨 Generación de imágenes</span>
+              <span className="rounded-full bg-zinc-700/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                Próximamente
+              </span>
+            </div>
+            <p className="mt-2 text-xs theme-text-muted">$0.10 por imagen (Krone Media)</p>
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium theme-text-primary">🎬 Generación de video</span>
+              <span className="rounded-full bg-zinc-700/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                Próximamente
+              </span>
+            </div>
+            <p className="mt-2 text-xs theme-text-muted">Por video corto — $0.50</p>
+          </div>
+          <div className="px-4 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium theme-text-primary">🤖 Chatbot web</span>
+              <span className="rounded-full bg-zinc-700/80 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                Próximamente
+              </span>
+            </div>
+            <p className="mt-2 text-xs theme-text-muted">Krone Chat — $0.02 por conversación</p>
+          </div>
         </div>
       </div>
     </section>
