@@ -371,9 +371,9 @@ const DEFAULT_COST_PER_MIN_BASICO = 0.45
 const DEFAULT_COST_PER_MIN_PRO = 0.75
 const DEFAULT_COST_PER_MIN_PREMIUM = 0.9
 
-const DEFAULT_RECARGA_MIN_PROSPECTADOR = 20
-const DEFAULT_RECARGA_MIN_VENDEDOR = 50
-const DEFAULT_RECARGA_MIN_CAZADOR = 100
+const DEFAULT_RECARGA_MIN_PROSPECTADOR = 5
+const DEFAULT_RECARGA_MIN_VENDEDOR = 5
+const DEFAULT_RECARGA_MIN_CAZADOR = 5
 
 function AdminCollapsibleSection({
   title,
@@ -881,8 +881,8 @@ export default function Admin() {
     const p = Number(recargaMinProspectador)
     const v = Number(recargaMinVendedor)
     const c = Number(recargaMinCazador)
-    if (![p, v, c].every((n) => Number.isFinite(n) && n > 5)) {
-      setRecargaMinError('Cada monto mínimo debe ser mayor a $5.')
+    if (![p, v, c].every((n) => Number.isFinite(n) && n >= 5)) {
+      setRecargaMinError('Cada monto mínimo debe ser al menos $5.')
       return
     }
     setRecargaMinError(null)
@@ -1692,15 +1692,17 @@ export default function Admin() {
         onToggle={() => setSecRecargaMinAbierto((x) => !x)}
       >
         <p className="mb-4 text-sm theme-text-muted">
-          Monto mínimo de recarga por plan (solo afecta la validación y la UI en Créditos). Debe ser mayor a $5.
+          Créditos universales: la recarga mínima recomendada es <strong className="text-zinc-200">$5 USD</strong> para
+          todos los planes. Estos campos siguen el esquema por plan en base de datos (validación y UI en Créditos); en
+          la práctica conviene dejar <strong className="text-zinc-200">$5</strong> en los tres.
         </p>
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div>
             <div className="text-sm font-medium theme-text-primary">Plan Prospectador</div>
-            <label className="mt-2 block text-xs theme-text-dim">Recarga mínima (USD)</label>
+            <label className="mt-2 block text-xs theme-text-dim">Recarga mínima (USD) — universal $5</label>
             <input
               type="number"
-              min={6}
+              min={5}
               step="0.01"
               value={recargaMinProspectador}
               onChange={(e) => setRecargaMinProspectador(Number(e.target.value))}
@@ -1709,10 +1711,10 @@ export default function Admin() {
           </div>
           <div>
             <div className="text-sm font-medium theme-text-primary">Plan Vendedor</div>
-            <label className="mt-2 block text-xs theme-text-dim">Recarga mínima (USD)</label>
+            <label className="mt-2 block text-xs theme-text-dim">Recarga mínima (USD) — universal $5</label>
             <input
               type="number"
-              min={6}
+              min={5}
               step="0.01"
               value={recargaMinVendedor}
               onChange={(e) => setRecargaMinVendedor(Number(e.target.value))}
@@ -1721,10 +1723,10 @@ export default function Admin() {
           </div>
           <div>
             <div className="text-sm font-medium theme-text-primary">Plan Cazador</div>
-            <label className="mt-2 block text-xs theme-text-dim">Recarga mínima (USD)</label>
+            <label className="mt-2 block text-xs theme-text-dim">Recarga mínima (USD) — universal $5</label>
             <input
               type="number"
-              min={6}
+              min={5}
               step="0.01"
               value={recargaMinCazador}
               onChange={(e) => setRecargaMinCazador(Number(e.target.value))}

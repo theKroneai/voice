@@ -43,8 +43,7 @@ SMS: Historial de SMS enviados (plan Cazador).
 Citas: Citas agendadas por los agentes.
 
 Créditos: Recargar saldo y ver historial.
-Mínimos: Prospectador $20, Vendedor $50, 
-Cazador $100.
+Recarga mínima: $5 USD para todos los planes.
 
 Secuencias: Automatizar seguimientos por
 días. 14 secuencias predefinidas disponibles.
@@ -86,7 +85,7 @@ horarios y preferencias.
 ## NUEVAS FUNCIONALIDADES
 - Login con Google disponible en la página de login
 - Créditos universales en USD (no minutos)
-  Prospectador mínimo $20, Vendedor $50, Cazador $100
+  Recarga mínima: $5 USD para todos los planes
 - SMS campaigns disponibles en /sms
 - 8 plantillas de campaña predefinidas
 - Sistema de compliance legal en /compliance

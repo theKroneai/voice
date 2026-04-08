@@ -1,10 +1,6 @@
 /**
- * Envío de correo vía n8n (proxy → Resend). Sin API key en el cliente.
+ * Envío de correo vía Supabase Edge Function `send-email`.
  */
-
-const N8N_URL = String(import.meta.env.VITE_N8N_URL ?? '')
-  .trim()
-  .replace(/\/+$/, '')
 
 function escapeHtml(s: string): string {
   return s
@@ -23,11 +19,19 @@ export const enviarCorreo = async ({
   subject: string
   html: string
 }) => {
-  if (!N8N_URL || !to.trim()) return
+  if (!to.trim()) return
+  const supabaseUrl = String(import.meta.env.VITE_SUPABASE_URL ?? '')
+    .trim()
+    .replace(/\/$/, '')
+  const anonKey = String(import.meta.env.VITE_SUPABASE_ANON_KEY ?? '').trim()
+  if (!supabaseUrl || !anonKey) return
   try {
-    await fetch(`${N8N_URL}/webhook/send-email`, {
+    await fetch(`${supabaseUrl}/functions/v1/send-email`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${anonKey}`,
+      },
       body: JSON.stringify({ to: to.trim(), subject, html }),
     })
   } catch (error) {

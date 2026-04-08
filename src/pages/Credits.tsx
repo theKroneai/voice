@@ -19,34 +19,23 @@ function isCreateCheckoutEdgeConfigured(): boolean {
   )
 }
 
-const TIERS_MONTOS_POR_PLAN: Record<string, number[]> = {
-  prospectador: [20, 50, 100, 200],
-  vendedor: [50, 100, 200, 500],
-  cazador: [100, 200, 500, 1000],
-}
+/** Montos en cards de recarga (montos mayores solo vía «Otro monto»). */
+const TIERS_RECARGA_PREDEFINIDOS = [5, 20, 50, 100] as const
 
 const DEFAULT_RECARGA_MINIMA_POR_PLAN: Record<string, number> = {
-  prospectador: 20,
-  vendedor: 50,
-  cazador: 100,
+  prospectador: 5,
+  vendedor: 5,
+  cazador: 5,
 }
 
 function parseRecargaMin(v: unknown, fallback: number): number {
   const n = typeof v === 'number' ? v : Number(v)
-  if (!Number.isFinite(n) || n <= 5) return fallback
+  if (!Number.isFinite(n) || n < 5) return fallback
   return n
 }
 
-function buildRecargaTextoPlan(planId: string, minUsd: number): string {
-  const safe = Number.isFinite(minUsd) && minUsd > 5 ? minUsd : DEFAULT_RECARGA_MINIMA_POR_PLAN[planId] ?? 20
-  const label = safe % 1 === 0 ? String(Math.round(safe)) : safe.toFixed(2)
-  if (planId === 'vendedor') {
-    return `Recarga mínima $${label} — Créditos para llamadas\noutbound, inbound y SMS`
-  }
-  if (planId === 'cazador') {
-    return `Recarga mínima $${label} — Créditos universales\npara todos los servicios Krone AI`
-  }
-  return `Recarga mínima $${label} — Úsalos en llamadas,\nSMS o cualquier servicio Krone`
+function textoRecargaUniversal(): string {
+  return 'Créditos universales — mínimo $5'
 }
 const PLAN_NOMBRE_PARA_ERROR: Record<string, string> = {
   prospectador: 'Prospectador',
@@ -55,6 +44,7 @@ const PLAN_NOMBRE_PARA_ERROR: Record<string, string> = {
 }
 
 const MENSAJES_MOTIVADORES: Record<number, string> = {
+  5: 'Prueba rápida con poco compromiso',
   20: 'Perfecto para empezar',
   50: 'Ideal para probar tu primer campaña',
   100: 'Lanza tu primera campaña completa',
@@ -221,6 +211,9 @@ export default function Credits() {
 
   const planIdForCheckout = useMemo(() => PLAN_TO_STRIPE[currentPlan], [currentPlan])
 
+  const currentPlanVoiceShortName =
+    PLAN_NOMBRE_PARA_ERROR[planIdForCheckout] ?? 'Prospectador'
+
   const minutosSaldoEstimados = useMemo(
     () => calcularMinutosEstimados(saldoUsd, planIdForCheckout),
     [saldoUsd, planIdForCheckout],
@@ -230,15 +223,19 @@ export default function Credits() {
     [saldoUsd],
   )
   const minimoDelPlan = useMemo(() => {
-    const fb = DEFAULT_RECARGA_MINIMA_POR_PLAN[planIdForCheckout] ?? 20
+    const fb = DEFAULT_RECARGA_MINIMA_POR_PLAN[planIdForCheckout] ?? 5
     return parseRecargaMin(recargaMinimaPorPlan[planIdForCheckout], fb)
   }, [planIdForCheckout, recargaMinimaPorPlan])
 
   const montosDisponibles = useMemo(() => {
-    const tiers = TIERS_MONTOS_POR_PLAN[planIdForCheckout] ?? TIERS_MONTOS_POR_PLAN.prospectador
-    const filtered = tiers.filter((x) => x >= minimoDelPlan)
+    const filtered = TIERS_RECARGA_PREDEFINIDOS.filter((x) => x >= minimoDelPlan)
     return filtered.length > 0 ? filtered : [minimoDelPlan]
-  }, [planIdForCheckout, minimoDelPlan])
+  }, [minimoDelPlan])
+
+  const minutosConCincoUsd = useMemo(
+    () => Math.floor(5 / currentPlanRate),
+    [currentPlanRate],
+  )
 
   const customPagarEnabled = useMemo(() => {
     const t = customAmount.trim()
@@ -465,8 +462,7 @@ export default function Credits() {
 
     setRecargaError(null)
     if (amountUsd < minimoDelPlan) {
-      const planNombre = PLAN_NOMBRE_PARA_ERROR[planIdForCheckout] ?? 'Prospectador'
-      setRecargaError(`El plan ${planNombre} requiere una recarga mínima de $${minimoDelPlan}`)
+      setRecargaError(`La recarga mínima es de $${minimoDelPlan}`)
       return
     }
     const userId = session?.user?.id
@@ -822,8 +818,8 @@ export default function Credits() {
                 </ul>
 
                 <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs italic" style={{ color: accentColor }}>
-                  <span>Con $50 → ~{Math.floor(50 / plan.precio_por_minuto)} min</span>
-                  <span>Con $100 → ~{Math.floor(100 / plan.precio_por_minuto)} min</span>
+                  <span>Con $5 → ~{Math.floor(5 / plan.precio_por_minuto)} min</span>
+                  <span>Con $20 → ~{Math.floor(20 / plan.precio_por_minuto)} min</span>
                 </div>
 
                 <button
@@ -859,10 +855,14 @@ export default function Credits() {
           <div className="text-sm font-semibold theme-text-primary">
             Recargar Créditos
           </div>
-          <div className="text-xs theme-text-muted">
-            Tus créditos se pueden usar en cualquier servicio de Krone AI. Plan actual:{' '}
-            {currentPlanLabel} · ~${currentPlanRate.toFixed(2)}/min voz outbound en tu plan · Pay
-            per use
+          <div className="mt-1 space-y-1 text-xs theme-text-muted">
+            <p>
+              Recarga desde $5 y úsalos en llamadas, SMS o cualquier servicio Krone AI
+            </p>
+            <p>
+              Tu plan {currentPlanVoiceShortName} → ${currentPlanRate.toFixed(2)}/min · Con $5
+              tienes ~{minutosConCincoUsd} min de llamadas
+            </p>
           </div>
         </div>
 
@@ -957,7 +957,7 @@ export default function Credits() {
                 const n = Number(customAmount)
                 setRecargaError(null)
                 if (!Number.isFinite(n) || n < minimoDelPlan) {
-                  setRecargaError(`Mínimo $${minimoDelPlan} para tu plan`)
+                  setRecargaError(`La recarga mínima es de $${minimoDelPlan}`)
                   return
                 }
                 void startCheckout(n)
@@ -971,13 +971,13 @@ export default function Credits() {
             {customAmount && Number(customAmount) >= minimoDelPlan
               ? `~${Math.floor(minutesForAmount(Number(customAmount), Number(customAmount) >= 200))} min disponibles`
               : customAmount
-                ? `Mínimo $${minimoDelPlan} para tu plan`
+                ? `La recarga mínima es de $${minimoDelPlan}`
                 : null}
           </div>
         </div>
 
         <p className="text-xs theme-text-muted whitespace-pre-line">
-          {buildRecargaTextoPlan(planIdForCheckout, minimoDelPlan)}
+          {textoRecargaUniversal()}
         </p>
 
         {recargaError && (
