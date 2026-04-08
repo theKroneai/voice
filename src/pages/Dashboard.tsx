@@ -56,15 +56,14 @@ const dispositionLabel: Record<string, string> = {
 const META_LLAMADAS_DIA = 50
 
 function getSaludoByHora(): string {
-  const h = new Date().getHours()
-  if (h >= 6 && h < 12) return 'Buenos días'
-  if (h >= 12 && h < 18) return 'Buenas tardes'
-  if (h >= 18 && h < 23) return 'Buenas noches'
-  return 'Buenos días'
+  const hora = new Date().getHours()
+  if (hora < 12) return 'Buenos días'
+  if (hora < 18) return 'Buenas tardes'
+  return 'Buenas noches'
 }
 
 export default function Dashboard() {
-  const [companyName, setCompanyName] = useState('')
+  const [greetingName, setGreetingName] = useState('Usuario')
   const [creditoDisplay, setCreditoDisplay] = useState('$0.00')
   const [llamadasHoy, setLlamadasHoy] = useState(0)
   const [llamadasSemana, setLlamadasSemana] = useState(0)
@@ -92,15 +91,36 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { data, error } = await supabase
+      const { data: userData, error } = await supabase
         .from('users')
         .select('id, es_admin, onboarding_completado, nombre')
         .eq('id', user.id)
         .maybeSingle()
       // eslint-disable-next-line no-console
-      console.log('users data:', data)
+      console.log('users data:', userData)
       // eslint-disable-next-line no-console
       console.log('users error:', error)
+
+      const meta = user.user_metadata as { full_name?: string; name?: string } | undefined
+      const nombreTabla =
+        userData?.nombre != null && String(userData.nombre).trim() !== ''
+          ? String(userData.nombre).trim()
+          : ''
+      const fullName = meta?.full_name?.trim() ?? ''
+      const metaName = meta?.name?.trim() ?? ''
+
+      const nombre =
+        nombreTabla ||
+        fullName ||
+        metaName ||
+        user.email?.split('@')[0]?.trim() ||
+        'Usuario'
+
+      if (!nombreTabla && fullName) {
+        await supabase.from('users').update({ nombre: fullName }).eq('id', user.id)
+      }
+
+      setGreetingName(nombre)
 
       const hoy = new Date()
       hoy.setHours(0, 0, 0, 0)
@@ -108,18 +128,6 @@ export default function Dashboard() {
       manana.setDate(manana.getDate() + 1)
       const inicioSemana = new Date(hoy)
       inicioSemana.setDate(hoy.getDate() - 6)
-
-      // Nombre de empresa (para saludo)
-      const { data: userRow, error: userRowErr } = await supabase
-        .from('users')
-        .select('company_name')
-        .eq('id', user.id)
-        .maybeSingle()
-      // eslint-disable-next-line no-console
-      console.log('users data:', userRow)
-      // eslint-disable-next-line no-console
-      console.log('users error:', userRowErr)
-      setCompanyName(userRow?.company_name?.trim() ?? '')
 
       const { data: credits } = await supabase
         .from('credits')
@@ -501,7 +509,7 @@ export default function Dashboard() {
   }
 
   const saludo = getSaludoByHora()
-  const displayName = companyName || 'Usuario'
+  const displayName = greetingName
 
   // Recomendaciones dinámicas
   const recomendaciones: { emoji: string; text: string }[] = []

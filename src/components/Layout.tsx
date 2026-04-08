@@ -3,6 +3,36 @@ import { Link, Outlet, useNavigate } from 'react-router-dom'
 import type { User } from '@supabase/supabase-js'
 import { LogOut } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+
+async function ensureUsersTableRow(user: User) {
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (existingUser) return
+  const meta = user.user_metadata as { full_name?: string; name?: string } | undefined
+  const nombre =
+    meta?.full_name ||
+    meta?.name ||
+    user.email?.split('@')[0] ||
+    null
+  const bootstrap = (import.meta.env.VITE_BOOTSTRAP_ADMIN_EMAIL as string | undefined)
+    ?.trim()
+    .toLowerCase()
+  const es_admin = Boolean(
+    bootstrap && user.email && user.email.trim().toLowerCase() === bootstrap,
+  )
+  const { error } = await supabase.from('users').insert({
+    id: user.id,
+    email: user.email,
+    nombre,
+    es_admin,
+  })
+  if (error && error.code !== '23505') {
+    console.warn('[Layout ensureUsersTableRow]', error.message)
+  }
+}
 import { calcularMinutosEstimados, smsEstimadosDesdeSaldo } from '../lib/creditUsd'
 import { Sidebar } from './Sidebar'
 import { ThemeToggle } from './ThemeToggle'
@@ -31,6 +61,18 @@ export function Layout() {
       sub.subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    void (async () => {
+      await ensureUsersTableRow(user)
+      if (cancelled) return
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
   useEffect(() => {
     if (!user?.id) {
@@ -127,6 +169,23 @@ export function Layout() {
                   )}
                 </Link>
               )}
+              {user ? (
+                <a
+                  href="/credits"
+                  style={{
+                    background: '#22c55e',
+                    color: '#000',
+                    padding: '6px 12px',
+                    borderRadius: 6,
+                    fontSize: 13,
+                    fontWeight: 'bold',
+                    textDecoration: 'none',
+                    marginLeft: 8,
+                  }}
+                >
+                  + Recargar
+                </a>
+              ) : null}
               <ThemeToggle />
               <button
                 type="button"

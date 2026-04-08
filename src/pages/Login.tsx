@@ -1,11 +1,42 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import type { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../lib/activityLogger'
-import { ensureUserRow, isOnboardingDone } from '../lib/onboardingGate'
+import { isOnboardingDone } from '../lib/onboardingGate'
 import { emailBienvenida, enviarCorreo } from '../lib/emails'
 import { publicLegalPath } from '../lib/publicSiteUrl'
 import { KRONE_BRAND_ICON } from '../utils/logos'
+
+async function ensureUsersTableRow(user: User) {
+  const { data: existingUser } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (existingUser) return
+  const meta = user.user_metadata as { full_name?: string; name?: string } | undefined
+  const nombre =
+    meta?.full_name ||
+    meta?.name ||
+    user.email?.split('@')[0] ||
+    null
+  const bootstrap = (import.meta.env.VITE_BOOTSTRAP_ADMIN_EMAIL as string | undefined)
+    ?.trim()
+    .toLowerCase()
+  const es_admin = Boolean(
+    bootstrap && user.email && user.email.trim().toLowerCase() === bootstrap,
+  )
+  const { error } = await supabase.from('users').insert({
+    id: user.id,
+    email: user.email,
+    nombre,
+    es_admin,
+  })
+  if (error && error.code !== '23505') {
+    console.warn('[Login ensureUsersTableRow]', error.message)
+  }
+}
 
 function welcomeDisplayName(user: { email?: string | null; user_metadata?: { full_name?: string } }) {
   const fromMeta = user.user_metadata?.full_name?.trim()
@@ -47,7 +78,7 @@ export default function Login() {
       if (!session?.user?.id) return
 
       const user = session.user
-      await ensureUserRow(user.id, session.user.email)
+      await ensureUsersTableRow(user)
       const { data, error } = await supabase
         .from('users')
         .select('id, es_admin, onboarding_completado, nombre')
@@ -110,7 +141,7 @@ export default function Login() {
       }
 
       const user = session.user
-      await ensureUserRow(userId, session?.user?.email)
+      await ensureUsersTableRow(user)
       const { data, error: rowErr } = await supabase
         .from('users')
         .select('id, es_admin, onboarding_completado, nombre')
@@ -164,7 +195,7 @@ export default function Login() {
       const session = data.session
 
       if (session?.user) {
-        await ensureUserRow(session.user.id, session.user.email)
+        await ensureUsersTableRow(session.user)
         const userEmail = session.user.email?.trim()
         if (userEmail) {
           void enviarCorreo({
@@ -183,7 +214,7 @@ export default function Login() {
         data: { session: s2 },
       } = await supabase.auth.getSession()
       if (s2?.user) {
-        await ensureUserRow(s2.user.id, s2.user.email)
+        await ensureUsersTableRow(s2.user)
         const userEmail = s2.user.email?.trim()
         if (userEmail) {
           void enviarCorreo({
