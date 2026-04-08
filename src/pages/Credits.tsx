@@ -3,16 +3,14 @@ import { useSearchParams } from 'react-router-dom'
 import { BadgeCheck, Loader2, Phone } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { logActivity, logError } from '../lib/activityLogger'
-import { getPublicWebhookBaseUrl } from '../lib/getPublicWebhookBaseUrl'
 import {
   SMS_USD_POR_MENSAJE,
   calcularMinutosEstimados,
   smsEstimadosDesdeSaldo,
 } from '../lib/creditUsd'
+import { emailRecargaExitosa, enviarCorreo } from '../lib/emails'
 
 type Plan = 'BASICO' | 'PRO' | 'PREMIUM'
-
-const WEBHOOK_BASE_URL = getPublicWebhookBaseUrl()
 
 const TIERS_MONTOS_POR_PLAN: Record<string, number[]> = {
   prospectador: [20, 50, 100, 200],
@@ -186,7 +184,7 @@ export default function Credits() {
 
   const [planCosts, setPlanCosts] = useState<Record<Plan, number>>(DEFAULT_PLAN_COST_PER_MIN)
   const [planes, setPlanes] = useState<PlanConfig[]>(FALLBACK_PLANES)
-  const [smsPrice, setSmsPrice] = useState<number>(0.05)
+  const [smsPrice, setSmsPrice] = useState<number>(0.08)
   const [recargaMinimaPorPlan, setRecargaMinimaPorPlan] = useState<Record<string, number>>({
     ...DEFAULT_RECARGA_MINIMA_POR_PLAN,
   })
@@ -195,6 +193,7 @@ export default function Credits() {
   const [successBanner, setSuccessBanner] = useState(false)
   const [successPaymentInfo, setSuccessPaymentInfo] = useState<{ amount: number; plan: string } | null>(null)
   const recargaExitosaLoggedRef = useRef(false)
+  const recargaExitosaEmailSentRef = useRef(false)
   const [cancelledBanner, setCancelledBanner] = useState(false)
   const [checkoutLoading, setCheckoutLoading] = useState<number | null>(null)
   const [customAmount, setCustomAmount] = useState('')
@@ -293,6 +292,47 @@ export default function Credits() {
         plan: successPaymentInfo.plan,
       },
     })
+  }, [successBanner, successPaymentInfo])
+
+  useEffect(() => {
+    if (!successBanner || !successPaymentInfo || recargaExitosaEmailSentRef.current) return
+    let cancelled = false
+    const run = async () => {
+      await new Promise((r) => setTimeout(r, 2500))
+      if (cancelled) return
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      const userId = session?.user?.id
+      const email = session?.user?.email?.trim()
+      if (!userId || !email) return
+      const { data: cred } = await supabase
+        .from('credits')
+        .select('saldo_usd')
+        .eq('user_id', userId)
+        .maybeSingle()
+      const { data: userRow } = await supabase
+        .from('users')
+        .select('nombre')
+        .eq('id', userId)
+        .maybeSingle()
+      if (cancelled) return
+      const nombre =
+        (typeof userRow?.nombre === 'string' && userRow.nombre.trim()) ||
+        email.split('@')[0] ||
+        email
+      const nuevoSaldo = Number(cred?.saldo_usd ?? 0)
+      await enviarCorreo({
+        to: email,
+        subject: '✅ Recarga exitosa — Krone Agent AI',
+        html: emailRecargaExitosa(nombre, successPaymentInfo.amount, nuevoSaldo),
+      })
+      recargaExitosaEmailSentRef.current = true
+    }
+    void run()
+    return () => {
+      cancelled = true
+    }
   }, [successBanner, successPaymentInfo])
 
   useEffect(() => {
@@ -401,13 +441,14 @@ export default function Credits() {
       data: { session },
     } = await supabase.auth.getSession()
     const userId = session?.user?.id
-    if (!userId || !WEBHOOK_BASE_URL) {
+    if (!userId || !import.meta.env.VITE_N8N_URL) {
       setCheckoutLoading(null)
       return
     }
     setCheckoutLoading(amountUsd)
     try {
-      const res = await fetch(`${WEBHOOK_BASE_URL}/webhook/create-checkout`, {
+      const webhookUrl = `${import.meta.env.VITE_N8N_URL}/webhook/create-checkout`
+      const res = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -483,39 +524,24 @@ export default function Credits() {
   useEffect(() => {
     async function loadPricing() {
       try {
-        let data:
-          | {
-              price_per_min_basico?: number | null
-              price_per_min_pro?: number | null
-              price_per_min_premium?: number | null
-              recarga_minima_prospectador?: number | string | null
-              recarga_minima_vendedor?: number | string | null
-              recarga_minima_cazador?: number | string | null
-            }
-          | null = null
-
-        const byId = await supabase
+        const { data: adminConfig, error: adminConfigError } = await supabase
           .from('admin_config')
           .select(
-            'price_per_min_basico, price_per_min_pro, price_per_min_premium, recarga_minima_prospectador, recarga_minima_vendedor, recarga_minima_cazador',
+            `
+            price_per_min_basico,
+            price_per_min_pro,
+            price_per_min_premium,
+            recarga_minima_prospectador,
+            recarga_minima_vendedor,
+            recarga_minima_cazador
+          `,
           )
-          .eq('id', 1)
-          .maybeSingle()
+          .limit(1)
+          .single()
 
-        if (!byId.error && byId.data) {
-          data = byId.data
-        } else {
-          const fallback = await supabase
-            .from('admin_config')
-            .select(
-              'price_per_min_basico, price_per_min_pro, price_per_min_premium, recarga_minima_prospectador, recarga_minima_vendedor, recarga_minima_cazador',
-            )
-            .limit(1)
-            .maybeSingle()
-          if (!fallback.error && fallback.data) data = fallback.data
-        }
+        if (adminConfigError || !adminConfig) return
 
-        if (!data) return
+        const data = adminConfig
 
         setPlanCosts({
           BASICO:
@@ -640,7 +666,10 @@ export default function Credits() {
             </div>
           </div>
           <div className="mt-4 flex items-baseline gap-2">
-            <div className="text-3xl font-semibold tracking-tight text-[#22c55e]">
+            <div
+              className="cursor-help text-3xl font-semibold tracking-tight text-[#22c55e]"
+              title={`${saldoUsd.toFixed(2)} USD ÷ ${SMS_USD_POR_MENSAJE} ≈ ${smsDesdeSaldoUsd} SMS disponibles (estimado)`}
+            >
               ${saldoUsd.toFixed(2)}
             </div>
             <div className="text-sm theme-text-muted">USD</div>
@@ -682,7 +711,7 @@ export default function Credits() {
           <div className="px-4 py-3">
             <div className="font-medium theme-text-primary">💬 SMS automático</div>
             <p className="mt-2 text-xs theme-text-muted">
-              Todos los planes — $0.05/mensaje
+              Todos los planes — $0.08/mensaje
             </p>
           </div>
           <div className="px-4 py-3">
@@ -835,7 +864,10 @@ export default function Credits() {
       </div>
 
       {/* Recarga rápida (Stripe) */}
-      <div className="rounded-2xl border theme-border/80 theme-bg-card p-5 space-y-4">
+      <div
+        id="recargar-creditos"
+        className="scroll-mt-24 rounded-2xl border theme-border/80 theme-bg-card p-5 space-y-4"
+      >
         <div>
           <div className="text-sm font-semibold theme-text-primary">
             Recargar Créditos
@@ -858,7 +890,7 @@ export default function Credits() {
               <button
                 key={amount}
                 type="button"
-                disabled={!!checkoutLoading || !WEBHOOK_BASE_URL}
+                disabled={!!checkoutLoading || !import.meta.env.VITE_N8N_URL}
                 onClick={() => startCheckout(amount)}
                 className="relative flex flex-col items-center justify-center rounded-xl border theme-border bg-[#0b0b0b]/80 px-4 py-5 text-center hover:border-[#22c55e]/50 hover:bg-[#22c55e]/10 transition disabled:opacity-60 disabled:cursor-not-allowed min-h-[120px]"
               >
@@ -903,7 +935,7 @@ export default function Credits() {
             />
             <button
               type="button"
-              disabled={!!checkoutLoading || !WEBHOOK_BASE_URL || !customAmount}
+              disabled={!!checkoutLoading || !import.meta.env.VITE_N8N_URL || !customAmount}
               onClick={() => {
                 const n = Number(customAmount)
                 setRecargaError(null)
@@ -937,9 +969,9 @@ export default function Credits() {
           </div>
         )}
 
-        {!WEBHOOK_BASE_URL && (
+        {!import.meta.env.VITE_N8N_URL && (
           <p className="text-xs text-amber-200">
-            Configura `VITE_WEBHOOK_BASE_URL` o usa el subdominio del frontend para habilitar recargas con Stripe.
+            Configura `VITE_N8N_URL` en el entorno del frontend para habilitar recargas con Stripe (webhook create-checkout en n8n).
           </p>
         )}
       </div>
@@ -963,6 +995,9 @@ export default function Credits() {
             <span className="text-2xl font-bold theme-accent-text">${smsPrice.toFixed(2)}</span>
             <span className="text-sm theme-text-muted">/mensaje</span>
           </div>
+          <p className="mt-2 text-xs theme-text-muted leading-relaxed">
+            Tus créditos son universales — recarga una vez y úsalos en llamadas y SMS
+          </p>
           <ul className="mt-4 space-y-2 text-xs theme-text-muted">
             <li className="flex gap-2">
               <span className="theme-accent-text">✓</span> SMS post-llamada automático
@@ -979,9 +1014,14 @@ export default function Credits() {
           </ul>
           <button
             type="button"
+            onClick={() =>
+              document
+                .getElementById('recargar-creditos')
+                ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
             className="mt-5 w-full rounded-lg bg-[#22c55e] px-3 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#1fb455] transition"
           >
-            Integración de pagos próximamente
+            💳 Recargar créditos para SMS
           </button>
         </div>
       </div>

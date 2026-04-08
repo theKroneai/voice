@@ -1,4 +1,4 @@
-export const SMS_USD_POR_MENSAJE = 0.05
+export const SMS_USD_POR_MENSAJE = 0.08
 
 const PRECIO_MIN_OUTBOUND: Record<string, number> = {
   prospectador: 0.45,

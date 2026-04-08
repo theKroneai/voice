@@ -1774,7 +1774,7 @@ export default function Campaigns() {
                     {(creditsPlanVoz ?? '').toLowerCase() !== 'cazador' &&
                     smsDisponibles > 0 ? (
                       <p className="text-xs text-zinc-400">
-                        💬 Tienes {smsDisponibles} SMS disponibles ($0.05 por
+                        💬 Tienes {smsDisponibles} SMS disponibles ($0.08 por
                         mensaje — descontado de tus créditos)
                       </p>
                     ) : null}
@@ -2384,7 +2384,7 @@ export default function Campaigns() {
                   Recargar créditos SMS
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-zinc-500">
-                  $0.05 por SMS
+                  $0.08 por SMS
                   <br />
                   Paga solo lo que uses
                 </p>

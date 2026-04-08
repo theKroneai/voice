@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { ThemeToggle } from '../components/ThemeToggle'
 import { KRONE_BRAND_ICON } from '../utils/logos'
 import { getPublicWebhookBaseUrl } from '../lib/getPublicWebhookBaseUrl'
 
@@ -25,7 +24,7 @@ const FALLBACK_SMS_PLAN: PlanConfigLanding & { plan_id: 'sms' } = {
   plan_id: 'sms',
   nombre: 'SMS Outbound',
   emoji: '💬',
-  precio_por_minuto: 0.05,
+  precio_por_minuto: 0.08,
   descripcion: null,
   features: ['SMS post-llamada automático', 'Confirmación de cita', 'Recordatorio 24h antes', 'Respuestas monitoreadas'],
 }
@@ -111,7 +110,6 @@ const LOGOS = ['Pasteur Water', 'SolarMax USA', 'Dental Familiar', 'LegalPro Gro
 
 export default function Landing() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
 
   const [businessDesc, setBusinessDesc] = useState('')
   const [phoneRaw, setPhoneRaw] = useState('')
@@ -134,12 +132,6 @@ export default function Landing() {
   const [demoFromExample, setDemoFromExample] = useState(false)
   const [demoSelectedExampleId, setDemoSelectedExampleId] = useState<string | null>(null)
   const demoFormRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
 
   useEffect(() => {
     let mounted = true
@@ -367,16 +359,11 @@ Reglas:
   }
 
   return (
-    <div className="min-h-screen theme-bg-page theme-text-primary font-sans antialiased">
+    <div className="min-h-screen bg-[#0a0a0a] text-[#ffffff] font-sans antialiased">
       {/* ═══════════════════════════════════════════ */}
       {/* 1. NAVBAR */}
       {/* ═══════════════════════════════════════════ */}
-      <header
-        className={
-          'sticky top-0 z-50 border-b transition-all duration-300 ' +
-          (scrolled ? 'theme-border theme-navbar-bg backdrop-blur-xl' : 'border-transparent bg-transparent')
-        }
-      >
+      <header className="sticky top-0 z-50 border-b border-[#1f1f1f] bg-[#0a0a0a]">
         <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <Link to="/" className="flex items-center gap-2">
             <img
@@ -384,11 +371,11 @@ Reglas:
               alt="Krone"
               width={36}
               height={36}
-              className="h-9 w-9 shrink-0 rounded-xl object-cover ring-1 ring-zinc-700/50"
+              className="h-9 w-9 shrink-0 rounded-xl object-cover ring-1 ring-[#1f1f1f]"
             />
-            <span className="text-xl font-bold theme-text-primary">Krone</span>
-            <span className="text-xl font-bold theme-accent-text">Agent AI</span>
-            <span className="rounded theme-bg-elevated px-2 py-0.5 text-[10px] font-medium theme-text-muted">
+            <span className="text-xl font-bold text-[#ffffff]">Krone</span>
+            <span className="text-xl font-bold text-[#22c55e]">Agent AI</span>
+            <span className="rounded bg-[#111111] px-2 py-0.5 text-[10px] font-medium text-[#888888] ring-1 ring-[#1f1f1f]">
               Voice Agents
             </span>
           </Link>
@@ -398,7 +385,7 @@ Reglas:
               <a
                 key={link.href}
                 href={link.href}
-                className="text-sm font-medium theme-text-muted hover:theme-text-primary transition"
+                className="text-sm font-medium text-[#888888] transition hover:text-[#ffffff]"
               >
                 {link.label}
               </a>
@@ -406,24 +393,22 @@ Reglas:
           </div>
 
           <div className="hidden md:flex md:items-center md:gap-3">
-            <ThemeToggle />
-            <Link to="/login" className="text-sm font-medium theme-text-muted hover:theme-text-primary transition">
+            <Link to="/login" className="text-sm font-medium text-[#888888] transition hover:text-[#ffffff]">
               Iniciar sesión
             </Link>
             <Link
               to="/register"
-              className="rounded-lg theme-accent px-4 py-2 text-sm font-semibold theme-accent-contrast hover:opacity-90 transition"
+              className="rounded-lg bg-[#22c55e] px-4 py-2 text-sm font-semibold text-[#0b0b0b] transition hover:opacity-90"
             >
               Empezar gratis →
             </Link>
           </div>
 
           <div className="flex items-center gap-2 md:hidden">
-            <ThemeToggle />
             <button
               type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="rounded-lg p-2 theme-text-muted hover:theme-bg-hover"
+              className="rounded-lg p-2 text-[#888888] hover:bg-[#111111]"
               aria-label="Menú"
             >
               {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
@@ -432,24 +417,24 @@ Reglas:
         </nav>
 
         {mobileMenuOpen && (
-          <div className="border-t theme-border theme-bg-page px-4 py-4 md:hidden">
+          <div className="border-t border-[#1f1f1f] bg-[#0a0a0a] px-4 py-4 md:hidden">
             <div className="flex flex-col gap-3">
               {NAV_LINKS.map((link) => (
                 <a
                   key={link.href}
                   href={link.href}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="text-sm font-medium theme-text-muted hover:theme-text-primary"
+                  className="text-sm font-medium text-[#888888] hover:text-[#ffffff]"
                 >
                   {link.label}
                 </a>
               ))}
-              <Link to="/login" className="text-sm font-medium theme-text-muted pt-2" onClick={() => setMobileMenuOpen(false)}>
+              <Link to="/login" className="text-sm font-medium text-[#888888] pt-2 hover:text-[#ffffff]" onClick={() => setMobileMenuOpen(false)}>
                 Iniciar sesión
               </Link>
               <Link
                 to="/register"
-                className="rounded-lg theme-accent py-2 text-center text-sm font-semibold theme-accent-contrast"
+                className="rounded-lg bg-[#22c55e] py-2 text-center text-sm font-semibold text-[#0b0b0b]"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 Empezar gratis →
@@ -459,11 +444,11 @@ Reglas:
         )}
       </header>
 
-      <main>
+      <main className="bg-[#0a0a0a]">
         {/* ═══════════════════════════════════════════ */}
         {/* 2. HERO */}
         {/* ═══════════════════════════════════════════ */}
-        <section className="relative overflow-hidden px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
+        <section className="relative overflow-hidden bg-[#0a0a0a] px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
           <div className="mx-auto max-w-7xl">
             <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16 lg:items-center">
               <div>
@@ -474,7 +459,7 @@ Reglas:
                   </span>
                   <span className="text-xs font-semibold text-[#22c55e]">Agente disponible ahora</span>
                 </div>
-                <h1 className="text-5xl font-black leading-tight tracking-tight theme-text-primary md:text-6xl">
+                <h1 className="text-5xl font-black leading-tight tracking-tight text-[#ffffff] md:text-6xl">
                   El vendedor que
                   <br />
                   nunca duerme,
@@ -483,7 +468,7 @@ Reglas:
                   <br />
                   y siempre cierra.
                 </h1>
-                <p className="mt-4 max-w-lg text-lg theme-text-muted">
+                <p className="mt-4 max-w-lg text-lg text-[#888888]">
                   Automatiza tus llamadas de ventas en español e inglés. Tu agente llama, convence, maneja objeciones y agenda visitas — 24/7, sin supervisión humana.
                 </p>
                 <div className="mt-8 flex flex-wrap gap-4">
@@ -495,48 +480,30 @@ Reglas:
                   </a>
                   <a
                     href="#como-funciona"
-                    className="inline-flex items-center rounded-xl border border-zinc-600 px-6 py-3.5 text-base font-medium theme-text-muted hover:border-zinc-500 hover:theme-bg-elevated/50 transition"
+                    className="inline-flex items-center rounded-xl border border-[#1f1f1f] px-6 py-3.5 text-base font-medium text-[#888888] transition hover:border-[#888888] hover:bg-[#111111]/80 hover:text-[#ffffff]"
                   >
                     Ver cómo funciona
                   </a>
                 </div>
-                <div className="mt-12 flex flex-wrap gap-8 border-t theme-border/80 pt-10">
-                  <div>
-                    <div className="text-2xl font-bold theme-text-primary">&lt; 1s</div>
-                    <div className="text-xs theme-text-dim">latencia de voz</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold theme-text-primary">ES + EN</div>
-                    <div className="text-xs theme-text-dim">bilingüe nativo</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold theme-text-primary">24/7</div>
-                    <div className="text-xs theme-text-dim">sin días libres</div>
-                  </div>
-                  <div>
-                    <div className="text-2xl font-bold theme-text-primary">+25</div>
-                    <div className="text-xs theme-text-dim">nichos disponibles</div>
-                  </div>
-                </div>
               </div>
 
               <div className="relative">
-                <div className="rounded-2xl border theme-border theme-bg-card p-4 shadow-2xl">
-                  <div className="border-b theme-border/80 pb-3 text-sm font-semibold theme-text-muted">
+                <div className="rounded-2xl border border-[#1f1f1f] bg-[#111111] p-4 shadow-2xl">
+                  <div className="border-b border-[#1f1f1f]/80 pb-3 text-sm font-semibold text-[#888888]">
                     Dashboard — Krone Agent AI
                   </div>
                   <div className="mt-4 grid grid-cols-3 gap-3">
-                    <div className="rounded-lg bg-[#111111] p-3">
-                      <div className="text-xs theme-text-dim">Llamadas hoy</div>
+                    <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-3">
+                      <div className="text-xs text-[#888888]">Llamadas hoy</div>
                       <div className="text-lg font-bold text-[#22c55e]">47</div>
                     </div>
-                    <div className="rounded-lg bg-[#111111] p-3">
-                      <div className="text-xs theme-text-dim">Citas agendadas</div>
-                      <div className="text-lg font-bold theme-text-primary">12</div>
+                    <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-3">
+                      <div className="text-xs text-[#888888]">Citas agendadas</div>
+                      <div className="text-lg font-bold text-[#ffffff]">12</div>
                     </div>
-                    <div className="rounded-lg bg-[#111111] p-3">
-                      <div className="text-xs theme-text-dim">Tasa contacto</div>
-                      <div className="text-lg font-bold theme-text-primary">34%</div>
+                    <div className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] p-3">
+                      <div className="text-xs text-[#888888]">Tasa contacto</div>
+                      <div className="text-lg font-bold text-[#ffffff]">34%</div>
                     </div>
                   </div>
                   <div className="mt-4 flex items-end gap-1 h-16">
@@ -550,8 +517,8 @@ Reglas:
                   </div>
                   <div className="mt-4 space-y-2">
                     {['Maria G. — Contestó', 'Juan P. — Cita agendada', 'Ana L. — Voicemail'].map((label, i) => (
-                      <div key={i} className="flex items-center justify-between rounded-lg bg-[#111111] px-3 py-2 text-xs">
-                        <span className="theme-text-muted">{label}</span>
+                      <div key={i} className="flex items-center justify-between rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] px-3 py-2 text-xs">
+                        <span className="text-[#888888]">{label}</span>
                         <span className="rounded-full bg-[#22c55e]/20 px-2 py-0.5 text-[10px] font-medium text-[#22c55e]">
                           {i === 0 ? 'Activo' : i === 1 ? 'Cita' : 'Pendiente'}
                         </span>
@@ -562,6 +529,26 @@ Reglas:
               </div>
             </div>
           </div>
+          <div className="mt-14 w-full border-t border-[#1f1f1f] bg-[#111111] sm:mt-16">
+            <div className="mx-auto flex max-w-7xl flex-wrap gap-8 px-4 py-10 sm:px-6 lg:gap-12 lg:px-8">
+              <div>
+                <div className="text-2xl font-bold text-[#ffffff]">&lt; 1s</div>
+                <div className="text-xs text-[#888888]">latencia de voz</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-[#ffffff]">ES + EN</div>
+                <div className="text-xs text-[#888888]">bilingüe nativo</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-[#ffffff]">24/7</div>
+                <div className="text-xs text-[#888888]">sin días libres</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-[#ffffff]">+25</div>
+                <div className="text-xs text-[#888888]">nichos disponibles</div>
+              </div>
+            </div>
+          </div>
         </section>
 
         {/* ═══════════════════════════════════════════ */}
@@ -569,15 +556,15 @@ Reglas:
         {/* ═══════════════════════════════════════════ */}
         <section
           id="demo"
-          className="border-y theme-border/50 bg-[#111111] px-4 py-20 sm:px-6 lg:px-8"
+          className="border-y border-[#1f1f1f]/50 bg-[#0a0a0a] px-4 py-20 sm:px-6 lg:px-8"
         >
           <div className="mx-auto max-w-7xl">
             {/* Ejemplos de llamadas reales — encima del bloque demo */}
             <div className="mb-12">
-              <h3 className="text-center text-2xl font-black tracking-tight text-zinc-100 md:text-3xl">
+              <h3 className="text-center text-2xl font-black tracking-tight text-[#ffffff] md:text-3xl">
                 Prueba con un ejemplo real
               </h3>
-              <p className="mx-auto mt-2 max-w-2xl text-center text-sm text-zinc-400 md:text-base">
+              <p className="mx-auto mt-2 max-w-2xl text-center text-sm text-[#888888] md:text-base">
                 Haz click en cualquier ejemplo y llámalo en segundos
               </p>
               <div className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -589,14 +576,14 @@ Reglas:
                       type="button"
                       onClick={() => applyRealCallExample(ex)}
                       className={
-                        'group flex w-full flex-col rounded-2xl border bg-[#0b0b0b] p-4 text-left transition ' +
+                        'group flex w-full flex-col rounded-2xl border border-[#1f1f1f] bg-[#111111] p-4 text-left transition ' +
                         (selected
                           ? 'border-[#22c55e] ring-2 ring-[#22c55e]/50'
-                          : 'border-zinc-800 hover:border-[#22c55e]/70')
+                          : 'hover:border-[#22c55e]/70')
                       }
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="text-sm font-semibold text-zinc-100">
+                        <span className="text-sm font-semibold text-[#ffffff]">
                           {ex.emoji} {ex.title}
                         </span>
                         <span
@@ -607,12 +594,12 @@ Reglas:
                           {ex.badge}
                         </span>
                       </div>
-                      <div className="my-3 h-px bg-zinc-800" />
-                      <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-500">
+                      <div className="my-3 h-px bg-[#1f1f1f]" />
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-[#888888]">
                         {ex.tipo}
                       </p>
-                      <p className="mt-0.5 text-sm text-zinc-300">{ex.nicho}</p>
-                      <p className="mt-3 flex-1 text-[13px] leading-snug text-zinc-500">
+                      <p className="mt-0.5 text-sm text-[#888888]">{ex.nicho}</p>
+                      <p className="mt-3 flex-1 text-[13px] leading-snug text-[#888888]">
                         &quot;{ex.preview}&quot;
                       </p>
                       <span className="mt-4 inline-flex w-full items-center justify-center rounded-lg bg-[#22c55e]/15 py-2.5 text-xs font-semibold text-[#22c55e] ring-1 ring-[#22c55e]/30 group-hover:bg-[#22c55e]/25">
@@ -630,13 +617,13 @@ Reglas:
                 <span className="inline-block rounded-full border border-[#22c55e]/40 bg-[#22c55e]/10 px-4 py-1.5 text-xs font-semibold text-[#22c55e]">
                   🎙️ Demo en vivo
                 </span>
-                <h2 className="mt-6 text-4xl font-black leading-tight theme-text-primary md:text-5xl">
+                <h2 className="mt-6 text-4xl font-black leading-tight text-[#ffffff] md:text-5xl">
                   Habla con nuestro agente ahora mismo
                 </h2>
-                <p className="mt-4 max-w-lg text-lg theme-text-muted">
+                <p className="mt-4 max-w-lg text-lg text-[#888888]">
                   Ingresa tu teléfono y recibirás una llamada real de nuestro agente de IA en menos de 30 segundos.
                 </p>
-                <ul className="mt-6 space-y-2 text-sm theme-text-muted">
+                <ul className="mt-6 space-y-2 text-sm text-[#888888]">
                   <li>
                     <span className="mr-2 text-[#22c55e]">✅</span> Voz natural en español
                   </li>
@@ -650,11 +637,11 @@ Reglas:
                     <span className="mr-2 text-[#22c55e]">✅</span> Menos de 30 segundos de espera
                   </li>
                 </ul>
-                <div className="mt-6 rounded-xl border theme-border/80 theme-bg-base px-4 py-3 text-sm theme-text-muted">
+                <div className="mt-6 rounded-xl border border-[#1f1f1f]/80 bg-[#111111] px-4 py-3 text-sm text-[#888888]">
                   <p className="italic">
                     &quot;Pensé que era una persona real. Increíble.&quot;
                   </p>
-                  <p className="mt-1 text-xs theme-text-dim">— Roberto G., Miami FL</p>
+                  <p className="mt-1 text-xs text-[#888888]">— Roberto G., Miami FL</p>
                 </div>
               </div>
 
@@ -662,25 +649,25 @@ Reglas:
               <div
                 id="demo-form"
                 ref={demoFormRef}
-                className="rounded-2xl border theme-border theme-bg-card p-6"
+                className="rounded-2xl border border-[#1f1f1f] bg-[#111111] p-6"
               >
-                <h3 className="text-lg font-semibold theme-text-primary">
+                <h3 className="text-lg font-semibold text-[#ffffff]">
                   Recibir llamada de demo
                 </h3>
-                <p className="mt-1 text-xs theme-text-dim">
+                <p className="mt-1 text-xs text-[#888888]">
                   Gratis · Sin registro · 30 segundos
                 </p>
-                <p className="mt-0.5 text-[11px] text-zinc-600">
+                <p className="mt-0.5 text-[11px] text-[#888888]">
                   Escribe qué debe decir la llamada; la IA mejorará tu mensaje para que suene natural.
                 </p>
 
                 <div className="mt-4 space-y-4">
                   {/* Campo 1: mensaje de la llamada */}
                   <div>
-                    <label className="text-sm font-medium theme-text-muted">
+                    <label className="text-sm font-medium text-[#888888]">
                       Qué debe decir la llamada
                     </label>
-                    <p className="mt-0.5 text-[11px] theme-text-dim">
+                    <p className="mt-0.5 text-[11px] text-[#888888]">
                       Escribe en tus palabras el mensaje que quieres que el agente transmita. La IA lo mejorará para que suene natural al hablar.
                     </p>
                     <textarea
@@ -689,10 +676,10 @@ Reglas:
                       value={businessDesc}
                       onChange={handleBusinessDescChange}
                       placeholder="Ej: Que la Empresa X le desea un feliz cumpleaños y que Dios lo llene de bendiciones..."
-                      className="mt-2 w-full rounded-lg theme-bg-base px-3 py-2 text-sm text-zinc-100 ring-1 theme-border/80 focus:outline-none focus:ring-2 focus:ring-[#22c55e] resize-none"
+                      className="mt-2 w-full rounded-lg border border-[#1f1f1f]/80 bg-[#111111] px-3 py-2 text-sm text-[#ffffff] focus:outline-none focus:ring-2 focus:ring-[#22c55e] resize-none"
                     />
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-[11px] theme-text-dim">
+                      <span className="text-[11px] text-[#888888]">
                         {businessDesc.length} / 300
                       </span>
                       <button
@@ -723,7 +710,7 @@ Reglas:
                           type="button"
                           onClick={handleRegenerateDemoMessage}
                           disabled={demoGenerateLoading || !demoContextSnapshot.trim()}
-                          className="rounded-lg border border-zinc-600/80 bg-zinc-800/80 px-2.5 py-1 text-[11px] font-medium text-zinc-300 hover:bg-zinc-700/80 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="rounded-lg border border-[#1f1f1f] bg-[#0a0a0a] px-2.5 py-1 text-[11px] font-medium text-[#888888] hover:bg-[#161616] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           🔄 Regenerar
                         </button>
@@ -733,11 +720,11 @@ Reglas:
 
                   {/* Campo 2: teléfono */}
                   <div>
-                    <label className="text-sm theme-text-muted">
+                    <label className="text-sm text-[#888888]">
                       Tu número de teléfono (USA)
                     </label>
-                    <div className="mt-1 flex items-center gap-2 rounded-lg theme-bg-base px-3 py-2 ring-1 theme-border/80 focus-within:ring-2 focus-within:ring-[#22c55e]">
-                      <span className="text-sm theme-text-dim">+1</span>
+                    <div className="mt-1 flex items-center gap-2 rounded-lg bg-[#111111] px-3 py-2 ring-1 border-[#1f1f1f]/80 focus-within:ring-2 focus-within:ring-[#22c55e]">
+                      <span className="text-sm text-[#888888]">+1</span>
                       <input
                         type="tel"
                         value={phoneFormatted}
@@ -746,7 +733,7 @@ Reglas:
                           setPhoneRaw(digits)
                         }}
                         placeholder="(555) 000-0000"
-                        className="w-full bg-transparent text-sm text-zinc-100 outline-none"
+                        className="w-full bg-transparent text-sm text-[#ffffff] outline-none"
                       />
                     </div>
                     {!phoneIsValid && phoneRaw.length > 0 && (
@@ -758,8 +745,8 @@ Reglas:
 
                   {/* Campo 3: nombre del agente */}
                   <div>
-                    <div className="text-sm theme-text-muted">Nombre del agente</div>
-                    <div className="mt-1 inline-flex rounded-full theme-bg-base p-1 ring-1 theme-border/80">
+                    <div className="text-sm text-[#888888]">Nombre del agente</div>
+                    <div className="mt-1 inline-flex rounded-full bg-[#111111] p-1 ring-1 border-[#1f1f1f]/80">
                       <button
                         type="button"
                         onClick={() => {
@@ -770,7 +757,7 @@ Reglas:
                           'px-3 py-1 text-xs font-medium rounded-full ' +
                           (agentName === 'Sofia'
                             ? 'bg-[#22c55e] text-[#0b0b0b]'
-                            : 'theme-text-muted hover:theme-bg-elevated/60')
+                            : 'text-[#888888] hover:bg-[#161616]')
                         }
                       >
                         👩 Sofia
@@ -785,7 +772,7 @@ Reglas:
                           'px-3 py-1 text-xs font-medium rounded-full ' +
                           (agentName === 'Alex'
                             ? 'bg-[#22c55e] text-[#0b0b0b]'
-                            : 'theme-text-muted hover:theme-bg-elevated/60')
+                            : 'text-[#888888] hover:bg-[#161616]')
                         }
                       >
                         👨 Alex
@@ -795,16 +782,16 @@ Reglas:
 
                   {/* Campo 4: voz */}
                   <div>
-                    <div className="text-sm theme-text-muted">Voz</div>
-                    <div className="mt-1 inline-flex rounded-full theme-bg-base p-1 ring-1 theme-border/80">
+                    <div className="text-sm text-[#888888]">Voz</div>
+                    <div className="mt-1 inline-flex rounded-full bg-[#111111] p-1 ring-1 border-[#1f1f1f]/80">
                       <button
                         type="button"
                         onClick={() => setAgentGender('femenino')}
                         className={
                           'px-3 py-1 text-xs font-medium rounded-full ' +
                           (agentGender === 'femenino'
-                            ? 'bg-zinc-200 text-[#0b0b0b]'
-                            : 'theme-text-muted hover:theme-bg-elevated/60')
+                            ? 'bg-[#22c55e] text-[#0b0b0b]'
+                            : 'text-[#888888] hover:bg-[#161616]')
                         }
                       >
                         🎵 Femenina
@@ -815,8 +802,8 @@ Reglas:
                         className={
                           'px-3 py-1 text-xs font-medium rounded-full ' +
                           (agentGender === 'masculino'
-                            ? 'bg-zinc-200 text-[#0b0b0b]'
-                            : 'theme-text-muted hover:theme-bg-elevated/60')
+                            ? 'bg-[#22c55e] text-[#0b0b0b]'
+                            : 'text-[#888888] hover:bg-[#161616]')
                         }
                       >
                         🎵 Masculina
@@ -861,7 +848,7 @@ Reglas:
                     )}
                   </div>
 
-                  <p className="text-[11px] theme-text-dim">
+                  <p className="text-[11px] text-[#888888]">
                     Al solicitar la demo aceptas recibir una llamada de prueba. Solo números de
                     USA.
                   </p>
@@ -876,14 +863,14 @@ Reglas:
         {/* ═══════════════════════════════════════════ */}
         {/* 4. LOGOS CLIENTES */}
         {/* ═══════════════════════════════════════════ */}
-        <section className="border-y theme-border/50 bg-[#111111] py-10">
+        <section className="border-y border-[#1f1f1f]/50 bg-[#111111] py-10">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <p className="text-center text-sm theme-text-dim">Negocios que ya automatizan sus ventas</p>
-            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-semibold theme-text-dim">
+            <p className="text-center text-sm text-[#888888]">Negocios que ya automatizan sus ventas</p>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-semibold text-[#888888]">
               {LOGOS.map((name, i) => (
                 <span key={name} className="flex items-center gap-4">
                   {name}
-                  {i < LOGOS.length - 1 ? <span className="text-zinc-600">·</span> : null}
+                  {i < LOGOS.length - 1 ? <span className="text-[#888888]">·</span> : null}
                 </span>
               ))}
             </div>
@@ -893,24 +880,27 @@ Reglas:
         {/* ═══════════════════════════════════════════ */}
         {/* 5. SOLUCIONES */}
         {/* ═══════════════════════════════════════════ */}
-        <section id="soluciones" className="px-4 py-20 sm:px-6 lg:px-8">
+        <section
+          id="soluciones"
+          className="border-t border-[#1f1f1f]/50 bg-[#0a0a0a] px-4 py-20 sm:px-6 lg:px-8"
+        >
           <div className="mx-auto max-w-7xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight text-[#ffffff] md:text-4xl">
               Una solución para cada momento del ciclo de ventas
             </h2>
             <div className="mt-14 grid grid-cols-1 gap-6 sm:grid-cols-2">
               {SOLUCIONES.map((s) => (
                 <div
                   key={s.title}
-                  className={`rounded-2xl border theme-border/80 theme-bg-card p-6 ${s.bgClass}`}
+                  className={`rounded-2xl border border-[#1f1f1f]/80 bg-[#111111] p-6 ${s.bgClass}`}
                 >
                   <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${s.badgeClass}`}>
                     {s.badge}
                   </span>
                   <div className="mt-4 text-4xl">{s.icon}</div>
-                  <h3 className="mt-3 text-xl font-bold theme-text-primary">{s.title}</h3>
-                  <p className="mt-2 text-sm theme-text-muted">{s.description}</p>
-                  <ul className="mt-4 space-y-1 text-xs theme-text-dim">
+                  <h3 className="mt-3 text-xl font-bold text-[#ffffff]">{s.title}</h3>
+                  <p className="mt-2 text-sm text-[#888888]">{s.description}</p>
+                  <ul className="mt-4 space-y-1 text-xs text-[#888888]">
                     {s.features.map((f) => (
                       <li key={f} className="flex items-center gap-2">
                         <span className="text-[#22c55e]">✓</span> {f}
@@ -932,27 +922,27 @@ Reglas:
         {/* ═══════════════════════════════════════════ */}
         {/* 6. CASOS DE USO */}
         {/* ═══════════════════════════════════════════ */}
-        <section id="casos" className="border-t theme-border/50 bg-[#111111] px-4 py-20 sm:px-6 lg:px-8">
+        <section id="casos" className="border-t border-[#1f1f1f]/50 bg-[#111111] px-4 py-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight text-[#ffffff] md:text-4xl">
               Para cualquier negocio que vende en USA
             </h2>
-            <p className="mx-auto mt-4 max-w-2xl text-center theme-text-muted">
+            <p className="mx-auto mt-4 max-w-2xl text-center text-[#888888]">
               +25 nichos preconfigurados. Listo para usar en minutos.
             </p>
             <div className="mt-12 grid grid-cols-2 gap-4 md:grid-cols-3">
               {CASOS_USO.map((c) => (
                 <div
                   key={c.name}
-                  className="rounded-xl border theme-border/80 theme-bg-card p-4 transition hover:border-zinc-600 hover:theme-bg-elevated/50"
+                  className="rounded-xl border border-[#1f1f1f]/80 bg-[#111111] p-4 transition hover:border-[#888888] hover:bg-[#161616]"
                 >
                   <div className="text-3xl">{c.emoji}</div>
-                  <div className="mt-2 text-sm font-semibold theme-text-primary">{c.name}</div>
-                  <div className="mt-1 text-xs theme-text-dim">{c.desc}</div>
+                  <div className="mt-2 text-sm font-semibold text-[#ffffff]">{c.name}</div>
+                  <div className="mt-1 text-xs text-[#888888]">{c.desc}</div>
                 </div>
               ))}
             </div>
-            <p className="mt-8 text-center text-sm theme-text-dim">
+            <p className="mt-8 text-center text-sm text-[#888888]">
               ¿Tu nicho no está aquí?{' '}
               <Link to="/register" className="font-medium text-[#22c55e] hover:underline">
                 Configura uno personalizado en minutos →
@@ -964,18 +954,21 @@ Reglas:
         {/* ═══════════════════════════════════════════ */}
         {/* 7. CÓMO FUNCIONA */}
         {/* ═══════════════════════════════════════════ */}
-        <section id="como-funciona" className="px-4 py-20 sm:px-6 lg:px-8">
+        <section
+          id="como-funciona"
+          className="border-t border-[#1f1f1f]/50 bg-[#0a0a0a] px-4 py-20 sm:px-6 lg:px-8"
+        >
           <div className="mx-auto max-w-7xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight text-[#ffffff] md:text-4xl">
               De cero a llamadas en 15 minutos
             </h2>
             <div className="mt-14 flex flex-col gap-8 lg:flex-row lg:items-stretch lg:gap-4">
               {PASOS.map((p, i) => (
                 <div key={p.title} className="relative flex flex-1 flex-col">
-                  <div className="flex flex-col items-center rounded-2xl border theme-border/80 theme-bg-card p-6 text-center">
+                  <div className="flex flex-col items-center rounded-2xl border border-[#1f1f1f]/80 bg-[#111111] p-6 text-center">
                     <div className="text-2xl font-black text-[#22c55e]">{p.num}</div>
-                    <div className="mt-2 text-sm font-bold theme-text-primary">{p.title}</div>
-                    <p className="mt-2 text-xs theme-text-dim">{p.desc}</p>
+                    <div className="mt-2 text-sm font-bold text-[#ffffff]">{p.title}</div>
+                    <p className="mt-2 text-xs text-[#888888]">{p.desc}</p>
                   </div>
                   {i < PASOS.length - 1 && (
                     <div className="hidden flex-1 items-center lg:flex">
@@ -994,19 +987,22 @@ Reglas:
         </section>
 
         {/* Precios */}
-        <section id="precios" className="px-4 py-20 sm:px-6 lg:px-8">
+        <section
+          id="precios"
+          className="border-t border-[#1f1f1f]/50 bg-[#111111] px-4 py-20 sm:px-6 lg:px-8"
+        >
           <div className="mx-auto max-w-7xl">
             <div className="text-center">
-              <h2 className="text-3xl font-bold theme-text-primary md:text-4xl">
+              <h2 className="text-3xl font-bold text-[#ffffff] md:text-4xl">
                 Precios simples
               </h2>
-              <p className="mt-4 theme-text-muted">
+              <p className="mt-4 text-[#888888]">
                 Paga solo por los minutos que usas. Sin contratos ni sorpresas.
               </p>
             </div>
 
             <div className="mt-8 flex justify-center">
-              <div className="inline-flex rounded-full theme-bg-base p-1 ring-1 theme-border/80">
+              <div className="inline-flex rounded-full bg-[#111111] p-1 ring-1 border-[#1f1f1f]/80">
                 <button
                   type="button"
                   onClick={() => setPricingTab('voz')}
@@ -1014,7 +1010,7 @@ Reglas:
                     'px-4 py-1.5 text-xs font-medium rounded-full ' +
                     (pricingTab === 'voz'
                       ? 'bg-[#22c55e] text-[#0b0b0b]'
-                      : 'theme-text-muted hover:theme-bg-elevated/60')
+                      : 'text-[#888888] hover:bg-[#161616]')
                   }
                 >
                   🎙️ Voz
@@ -1026,7 +1022,7 @@ Reglas:
                     'px-4 py-1.5 text-xs font-medium rounded-full ' +
                     (pricingTab === 'sms'
                       ? 'bg-[#22c55e] text-[#0b0b0b]'
-                      : 'theme-text-muted hover:theme-bg-elevated/60')
+                      : 'text-[#888888] hover:bg-[#161616]')
                   }
                 >
                   💬 SMS
@@ -1052,7 +1048,7 @@ Reglas:
                       className={`relative flex flex-col rounded-2xl border p-6 ${
                         isPopular
                           ? 'border-[#f97316]/70 bg-[#111111] ring-1 ring-[#f97316]/30'
-                          : 'theme-border/80 theme-bg-card'
+                          : 'border-[#1f1f1f]/80 bg-[#111111]'
                       }`}
                     >
                       {isPopular && (
@@ -1061,17 +1057,17 @@ Reglas:
                         </span>
                       )}
                       <div className="mt-1">
-                        <h3 className="text-lg font-semibold theme-text-primary">
+                        <h3 className="text-lg font-semibold text-[#ffffff]">
                           {plan.emoji ?? ''} {plan.nombre}
                         </h3>
                         <div className="mt-4 flex items-baseline gap-1">
-                          <span className="text-3xl font-bold theme-text-primary">
+                          <span className="text-3xl font-bold text-[#ffffff]">
                             ${plan.precio_por_minuto.toFixed(2)}
                           </span>
-                          <span className="text-xs theme-text-dim">/minuto</span>
+                          <span className="text-xs text-[#888888]">/minuto</span>
                         </div>
                       </div>
-                      <ul className="mt-4 space-y-1 text-xs theme-text-muted">
+                      <ul className="mt-4 space-y-1 text-xs text-[#888888]">
                         {features.map((f, i) => (
                           <li key={i}>✅ {f}</li>
                         ))}
@@ -1081,7 +1077,7 @@ Reglas:
                         className={
                           isPopular
                             ? 'mt-6 inline-flex w-full items-center justify-center rounded-xl bg-[#f97316] px-4 py-2 text-sm font-semibold text-[#0b0b0b] hover:bg-[#ea6a0f] transition'
-                            : 'mt-6 inline-flex w-full items-center justify-center rounded-xl border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-100 hover:theme-bg-elevated/60 transition'
+                            : 'mt-6 inline-flex w-full items-center justify-center rounded-xl border border-[#1f1f1f] px-4 py-2 text-sm font-semibold text-[#ffffff] hover:bg-[#161616] transition'
                         }
                       >
                         {ctaText}
@@ -1092,17 +1088,17 @@ Reglas:
               </div>
             ) : (
               <div className="mt-12 flex justify-center">
-                <div className="w-full max-w-sm rounded-2xl border theme-border theme-bg-card p-6 text-center">
-                  <h3 className="text-lg font-semibold theme-text-primary">
+                <div className="w-full max-w-sm rounded-2xl border border-[#1f1f1f] bg-[#111111] p-6 text-center">
+                  <h3 className="text-lg font-semibold text-[#ffffff]">
                     {planSms.emoji ?? '💬'} {planSms.nombre}
                   </h3>
                   <div className="mt-3 flex items-baseline justify-center gap-1">
-                    <span className="text-3xl font-bold theme-text-primary">
+                    <span className="text-3xl font-bold text-[#ffffff]">
                       ${planSms.precio_por_minuto.toFixed(2)}
                     </span>
-                    <span className="text-xs theme-text-dim">/mensaje</span>
+                    <span className="text-xs text-[#888888]">/mensaje</span>
                   </div>
-                  <ul className="mt-4 space-y-1 text-xs theme-text-muted text-left">
+                  <ul className="mt-4 space-y-1 text-xs text-[#888888] text-left">
                     {(planSms.features ?? []).map((f, i) => (
                       <li key={i}>✅ {f}</li>
                     ))}
@@ -1117,22 +1113,22 @@ Reglas:
               </div>
             )}
 
-            <p className="mt-10 text-center text-sm theme-text-dim">
+            <p className="mt-10 text-center text-sm text-[#888888]">
               💳 Ingresa ya tu número de teléfono y prueba nuestra demo.
             </p>
           </div>
         </section>
 
         {/* Testimonios */}
-        <section className="px-4 py-20 sm:px-6 lg:px-8">
+        <section className="border-t border-[#1f1f1f]/50 bg-[#0a0a0a] px-4 py-20 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <h2 className="text-center text-3xl font-bold tracking-tight theme-text-primary md:text-4xl">
+            <h2 className="text-center text-3xl font-bold tracking-tight text-[#ffffff] md:text-4xl">
               Resultados reales
             </h2>
             <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
-              <div className="rounded-2xl border theme-border/80 theme-bg-card p-6">
+              <div className="rounded-2xl border border-[#1f1f1f]/80 bg-[#111111] p-6">
                 <div className="text-sm text-yellow-400">⭐⭐⭐⭐⭐</div>
-                <p className="mt-3 text-sm theme-text-muted">
+                <p className="mt-3 text-sm text-[#888888]">
                   &quot;Pasamos de 20 citas semanales a más de 80 sin contratar más
                   personal.&quot;
                 </p>
@@ -1141,16 +1137,16 @@ Reglas:
                     CM
                   </div>
                   <div className="text-xs">
-                    <div className="font-semibold theme-text-primary">Carlos M.</div>
-                    <div className="theme-text-dim">
+                    <div className="font-semibold text-[#ffffff]">Carlos M.</div>
+                    <div className="text-[#888888]">
                       Empresa de Agua — Miami, FL
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="rounded-2xl border theme-border/80 theme-bg-card p-6">
+              <div className="rounded-2xl border border-[#1f1f1f]/80 bg-[#111111] p-6">
                 <div className="text-sm text-yellow-400">⭐⭐⭐⭐⭐</div>
-                <p className="mt-3 text-sm theme-text-muted">
+                <p className="mt-3 text-sm text-[#888888]">
                   &quot;El agente habla mejor español que muchos de mis empleados.
                   Increíble naturalidad.&quot;
                 </p>
@@ -1159,16 +1155,16 @@ Reglas:
                     AR
                   </div>
                   <div className="text-xs">
-                    <div className="font-semibold theme-text-primary">Ana R.</div>
-                    <div className="theme-text-dim">
+                    <div className="font-semibold text-[#ffffff]">Ana R.</div>
+                    <div className="text-[#888888]">
                       Clínica Dental — Houston, TX
                     </div>
                   </div>
                 </div>
               </div>
-              <div className="rounded-2xl border theme-border/80 theme-bg-card p-6">
+              <div className="rounded-2xl border border-[#1f1f1f]/80 bg-[#111111] p-6">
                 <div className="text-sm text-yellow-400">⭐⭐⭐⭐⭐</div>
-                <p className="mt-3 text-sm theme-text-muted">
+                <p className="mt-3 text-sm text-[#888888]">
                   &quot;En 2 semanas recuperé la inversión. El ROI es impresionante.&quot;
                 </p>
                 <div className="mt-4 flex items-center gap-3">
@@ -1176,8 +1172,8 @@ Reglas:
                     MS
                   </div>
                   <div className="text-xs">
-                    <div className="font-semibold theme-text-primary">Miguel S.</div>
-                    <div className="theme-text-dim">
+                    <div className="font-semibold text-[#ffffff]">Miguel S.</div>
+                    <div className="text-[#888888]">
                       Roofing Contractor — Orlando, FL
                     </div>
                   </div>
@@ -1188,12 +1184,12 @@ Reglas:
         </section>
 
         {/* CTA final */}
-        <section className="border-t border-[#22c55e]/20 bg-gradient-to-b from-[#0b0b0b] to-[#0f1a0f] px-4 py-24 sm:px-6 lg:px-8">
+        <section className="border-t border-[#1f1f1f]/50 bg-gradient-to-b from-[#0a0a0a] to-[#0d160d] px-4 py-24 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-4xl text-center">
-            <h2 className="text-4xl font-black tracking-tight theme-text-primary md:text-5xl">
+            <h2 className="text-4xl font-black tracking-tight text-[#ffffff] md:text-5xl">
               ¿Listo para automatizar tus ventas?
             </h2>
-            <p className="mt-4 text-sm theme-text-muted md:text-base">
+            <p className="mt-4 text-sm text-[#888888] md:text-base">
               Únete a negocios en USA que ya usan Krone Agent AI para generar más citas
               sin más vendedores.
             </p>
@@ -1211,34 +1207,64 @@ Reglas:
                     .getElementById('demo')
                     ?.scrollIntoView({ behavior: 'smooth' })
                 }
-                className="inline-flex items-center justify-center rounded-xl border border-zinc-600 px-8 py-4 text-base font-semibold theme-text-muted hover:theme-bg-elevated/50 transition"
+                className="inline-flex items-center justify-center rounded-xl border border-[#1f1f1f] px-8 py-4 text-base font-semibold text-[#888888] transition hover:bg-[#161616] hover:text-[#ffffff]"
               >
                 📞 Probar demo ahora
               </button>
             </div>
-            <p className="mt-4 text-xs theme-text-dim">
+            <p className="mt-4 text-xs text-[#888888]">
               Sin tarjeta de crédito · 30 min gratis · Cancela cuando quieras
             </p>
           </div>
         </section>
 
         {/* FOOTER */}
-        <footer className="border-t theme-border/80 theme-bg-page px-4 py-12 sm:px-6 lg:px-8">
+        <footer className="border-t border-[#1f1f1f]/80 bg-[#0a0a0a] px-4 py-12 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl flex flex-col items-center justify-between gap-6 sm:flex-row">
             <div className="flex items-center gap-2">
-              <span className="font-bold theme-text-primary">Krone</span>
+              <span className="font-bold text-[#ffffff]">Krone</span>
               <span className="font-bold text-[#22c55e]">Agent AI</span>
             </div>
-            <div className="flex gap-8 text-sm theme-text-dim">
-              <a href="#soluciones" className="hover:theme-text-primary transition">Soluciones</a>
-              <a href="#casos" className="hover:theme-text-primary transition">Casos de uso</a>
-              <a href="#demo" className="hover:theme-text-primary transition">Demo</a>
-              <Link to="/login" className="hover:theme-text-primary transition">Iniciar sesión</Link>
+            <div className="flex gap-8 text-sm text-[#888888]">
+              <a href="#soluciones" className="hover:text-[#ffffff] transition">Soluciones</a>
+              <a href="#casos" className="hover:text-[#ffffff] transition">Casos de uso</a>
+              <a href="#demo" className="hover:text-[#ffffff] transition">Demo</a>
+              <Link to="/login" className="hover:text-[#ffffff] transition">Iniciar sesión</Link>
             </div>
           </div>
-          <p className="mx-auto mt-8 max-w-7xl text-center text-xs text-zinc-600">
+          <p className="mx-auto mt-8 max-w-7xl text-center text-xs text-[#888888]">
             © {new Date().getFullYear()} Krone Agent AI. Voice agents para ventas en USA.
           </p>
+          <div
+            style={{
+              borderTop: '1px solid #1f1f1f',
+              paddingTop: 24,
+              marginTop: 24,
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 24,
+              flexWrap: 'wrap',
+            }}
+          >
+            <a
+              href="/privacy-policy"
+              style={{ color: '#555', fontSize: 13, textDecoration: 'none' }}
+            >
+              Política de Privacidad
+            </a>
+            <a href="/terms" style={{ color: '#555', fontSize: 13, textDecoration: 'none' }}>
+              Términos de Servicio
+            </a>
+            <a href="/compliance" style={{ color: '#555', fontSize: 13, textDecoration: 'none' }}>
+              Compliance / Habeas Data
+            </a>
+            <a
+              href="mailto:hola@thekroneai.com"
+              style={{ color: '#555', fontSize: 13, textDecoration: 'none' }}
+            >
+              hola@thekroneai.com
+            </a>
+          </div>
         </footer>
       </main>
     </div>

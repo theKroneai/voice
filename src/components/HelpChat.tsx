@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { logActivity } from '../lib/activityLogger'
+import { emailTicketCreado, enviarCorreo } from '../lib/emails'
 import { KRONE_BRAND_ICON } from '../utils/logos'
 
 const WELCOME_TEXT =
@@ -74,7 +75,36 @@ horarios y preferencias.
    que nuestro equipo lo revise."
 3. Incluir en la respuesta el texto:
    [CREAR_TICKET: descripción del error]
-   (esto lo detecta el código para crear el ticket)`
+   (esto lo detecta el código para crear el ticket)
+
+## PÁGINAS LEGALES
+- Política de Privacidad: thekroneai.com/privacy-policy
+- Términos de Servicio: thekroneai.com/terms
+- Compliance/Habeas Data: thekroneai.com/compliance
+
+## NUEVAS FUNCIONALIDADES
+- Login con Google disponible en la página de login
+- Créditos universales en USD (no minutos)
+  Prospectador mínimo $20, Vendedor $50, Cazador $100
+- SMS campaigns disponibles en /sms
+- 8 plantillas de campaña predefinidas
+- Sistema de compliance legal en /compliance
+  (requerido antes de lanzar campañas)
+- Tickets de soporte desde este chat
+
+## PRECIOS ACTUALIZADOS
+- Voz Prospectador: $0.45/min
+- Voz Vendedor: $0.75/min  
+- Voz Cazador: $0.90/min
+- SMS: $0.08/mensaje
+- Créditos universales — sirven para 
+  voz, SMS y futuros servicios
+
+## CONTACTO Y SOPORTE
+- Email: hola@thekroneai.com
+- Web: thekroneai.com
+- Para reportar errores: usar este chat
+  y se crea un ticket automáticamente`
 
 const TICKET_REGEX = /\[CREAR_TICKET:\s*([^\]]+)]/i
 
@@ -236,7 +266,25 @@ export function HelpChat() {
       categoria: 'error',
       detalle: { descripcion: descripcionError.substring(0, 200) },
     })
-    const id = data?.id ?? '—'
+    const ticketUuid = data?.id
+    const email = user?.email?.trim()
+    if (email && user?.id && typeof ticketUuid === 'string') {
+      const { data: prof } = await supabase
+        .from('users')
+        .select('nombre')
+        .eq('id', user.id)
+        .maybeSingle()
+      const nombre =
+        (typeof prof?.nombre === 'string' && prof.nombre.trim()) ||
+        email.split('@')[0] ||
+        email
+      void enviarCorreo({
+        to: email,
+        subject: '🎫 Ticket recibido — Krone Agent AI',
+        html: emailTicketCreado(nombre, ticketUuid, descripcionError),
+      })
+    }
+    const id = ticketUuid ?? '—'
     const short = typeof id === 'string' && id.length > 8 ? id.slice(0, 8) : id
     return `✅ Ticket #${short} creado. Nuestro equipo lo revisará pronto.`
   }, [])
